@@ -190,9 +190,14 @@ export async function handleTmuxInjection({
 
   const activeModes = [];
   const activeModeStates = {};
-  try {
-    const scopedDirs = await getScopedStateDirsForCurrentSession(stateDir);
-    for (const scopedDir of scopedDirs) {
+  const scannedStateDirs = new Set();
+  const payloadSessionId = safeString(payload.session_id || payload['session-id'] || '');
+  const scanActiveModeStateDirs = async (dirs, preserveExisting = false) => {
+    for (const scopedDir of dirs) {
+      const resolvedScopedDir = resolvePath(scopedDir);
+      if (scannedStateDirs.has(resolvedScopedDir)) continue;
+      scannedStateDirs.add(resolvedScopedDir);
+
       const files = await readdir(scopedDir).catch(() => []);
       for (const file of files) {
         if (!file.endsWith('-state.json') || file === 'tmux-hook-state.json') continue;
@@ -201,9 +206,19 @@ export async function handleTmuxInjection({
         if (parsed && parsed.active) {
           const modeName = file.replace('-state.json', '');
           activeModes.push(modeName);
-          activeModeStates[modeName] = parsed;
+          if (!preserveExisting || !activeModeStates[modeName]) {
+            activeModeStates[modeName] = parsed;
+          }
         }
       }
+    }
+  };
+  try {
+    const scopedDirs = await getScopedStateDirsForCurrentSession(stateDir, payloadSessionId);
+    await scanActiveModeStateDirs(scopedDirs);
+
+    if (!pickActiveMode(activeModes, config.allowed_modes) && !scannedStateDirs.has(resolvePath(stateDir))) {
+      await scanActiveModeStateDirs([stateDir], true);
     }
   } catch {
     // Non-fatal
