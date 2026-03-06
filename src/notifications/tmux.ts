@@ -146,7 +146,7 @@ export function captureTmuxPane(paneId?: string | null, lines: number = 12): str
   const clampedLines = Math.max(1, Math.min(MAX_CAPTURE_LINES, safeLines));
 
   try {
-    const output = execFileSync("tmux", ["capture-pane", "-t", target, "-p", "-l", String(clampedLines)], {
+    const output = execFileSync("tmux", ["capture-pane", "-t", target, "-p", "-S", `-${clampedLines}`], {
       encoding: "utf-8",
       timeout: 3000,
       stdio: ["pipe", "pipe", "pipe"],
