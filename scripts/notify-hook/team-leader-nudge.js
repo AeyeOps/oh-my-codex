@@ -543,7 +543,10 @@ export async function maybeNudgeTeamLeader({ cwd, stateDir, logsDir, preComputed
     // Stale-leader follow-up is the only periodic visible nudge path.
     // This keeps the leader pane quieter when the leader is not actually stale.
     const stalePanesNudge = paneStatus.alive && leaderStale;
-    const stalledTeamNudge = teamProgressStalled && leaderStale && (dueByTime || prevReason !== 'leader_stale_with_stalled_team');
+    const stalledTeamReason = leaderStale ? 'leader_stale_with_stalled_team' : 'stalled_team_progress';
+    const previousStalledTeamNudge =
+      prevReason === 'leader_stale_with_stalled_team' || prevReason === 'stalled_team_progress';
+    const stalledTeamNudge = teamProgressStalled && (dueByTime || !previousStalledTeamNudge);
     const staleFollowupDue = stalePanesNudge && dueByTime;
 
     if (!shouldSendAllIdleNudge && !hasNewMessage && !stalledTeamNudge && !staleFollowupDue) continue;
@@ -561,13 +564,14 @@ export async function maybeNudgeTeamLeader({ cwd, stateDir, logsDir, preComputed
         + `but has no work-start evidence yet (status: ${ackWithoutStartEvidence.statusState}, no owned in_progress task). `
         + `Run: omx team status ${teamName}`;
     } else if (stalledTeamNudge) {
-      nudgeReason = 'leader_stale_with_stalled_team';
+      nudgeReason = stalledTeamReason;
       const { pending, in_progress, blocked } = progressSnapshot.taskCounts;
       const missingSignals = progressSnapshot.missingSignalWorkers > 0
         ? `; ${progressSnapshot.missingSignalWorkers} worker signal${progressSnapshot.missingSignalWorkers === 1 ? '' : 's'} missing`
         : '';
+      const stallPrefix = leaderStale ? 'leader stale, ' : 'worker panes stalled, ';
       text =
-        `Team ${teamName}: leader stale, no team progress for ${formatDurationMs(stalledForMs)} `
+        `Team ${teamName}: ${stallPrefix}no team progress for ${formatDurationMs(stalledForMs)} `
         + `(pending:${pending} in_progress:${in_progress} blocked:${blocked}${missingSignals}). `
         + `Run: omx team status ${teamName}`;
     } else if (stalePanesNudge && hasNewMessage) {
