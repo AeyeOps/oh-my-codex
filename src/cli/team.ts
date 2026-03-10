@@ -87,6 +87,8 @@ const TEAM_API_OPERATION_REQUIRED_FIELDS: Record<TeamApiOperation, string[]> = {
   'append-event': ['team_name', 'type', 'worker'],
   'read-events': ['team_name'],
   'await-event': ['team_name'],
+  'read-idle-state': ['team_name'],
+  'read-stall-state': ['team_name'],
   'get-summary': ['team_name'],
   'cleanup': ['team_name'],
   'write-shutdown-request': ['team_name', 'worker', 'requested_by'],
@@ -118,6 +120,8 @@ const TEAM_API_OPERATION_NOTES: Partial<Record<TeamApiOperation, string>> = {
   'transition-task-status': 'Lifecycle flow is claim-safe and typically transitions in_progress -> completed|failed.',
   'read-events': 'Events are returned in canonical form; worker_idle log entries normalize to type worker_state_changed with source_type worker_idle. wakeable_only defaults to false; set wakeable_only=true to mirror omx team await semantics.',
   'await-event': 'Waits for the next matching event and returns status=timeout when no matching event arrives before timeout_ms. wakeable_only defaults to false; set wakeable_only=true to mirror omx team await semantics.',
+  'read-idle-state': 'Builds a structured idle summary from the existing monitor snapshot, team summary, and recent events.',
+  'read-stall-state': 'Builds a structured stall summary from the existing monitor snapshot, team summary, and recent events.',
 };
 
 function sampleValueForTeamApiField(field: string): unknown {
