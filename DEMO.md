@@ -410,7 +410,7 @@ Quick start:
 ./scripts/run-autoresearch-showcase.sh omx-self ml-tabular bayesopt
 ```
 
-See `playground/README.md` for the mission index, result summaries, and repository-hygiene guidance.
+See `playground/README.md` for the mission index, completed-result summaries, and repository-hygiene guidance.
 
 ## Demo Script Reference
 

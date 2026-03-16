@@ -16,7 +16,7 @@ Design goals:
 | OMX self-optimization | `missions/in-action-cat-shellout-demo/` | `scripts/eval-in-action-cat-shellout-demo.js` | ✅ completed | kept commit `99ebf16` / cherry-picked as `8478261` removing the autoresearch manifest `cat` shell-out |
 | Kaggle-style tabular ML | `missions/ml-kaggle-model-optimization/` | `scripts/eval-ml-kaggle-model-optimization.py` | ✅ completed | ROC AUC improved from `0.9458071278825997` to `0.9976939203354298` |
 | Noisy high-dimensional Bayes-opt | `missions/noisy-bayesopt-highdim/` | `scripts/eval-noisy-bayesopt-highdim.py` | ✅ completed | score improved from `2.833048700169374` to `4.75978993804531` |
-| Latent subspace discovery | `missions/noisy-latent-subspace-discovery/` | `scripts/eval-noisy-latent-subspace-discovery.py` | 🧪 scaffolded | baseline established; showcase run intentionally stopped before completion during docs pass |
+| Latent subspace discovery | `missions/noisy-latent-subspace-discovery/` | `scripts/eval-noisy-latent-subspace-discovery.py` | ✅ completed | score improved from `3.7019658949006504` to `4.176124116152444` with a compact `cem_search` strategy |
 
 Use `scripts/run-autoresearch-showcase.sh --list` to see the bundled launch targets, or run one or more showcases directly with the wrapper script.
 
@@ -27,7 +27,7 @@ Use `scripts/run-autoresearch-showcase.sh --list` to see the bundled launch targ
 | OMX self-optimization | n/a | behavior-preserving cleanup | n/a |
 | Kaggle-style tabular ML | 0.9458071278825997 AUC | 0.9976939203354298 AUC | +0.0518867924528301 |
 | Noisy high-dimensional Bayes-opt | 2.833048700169374 | 4.75978993804531 | +1.926741237875936 |
-| Latent subspace discovery | 3.7019658949006504 | not finalized | n/a |
+| Latent subspace discovery | 3.7019658949006504 | 4.176124116152444 | +0.47415822125179353 |
 
 ## Showcase demos
 
