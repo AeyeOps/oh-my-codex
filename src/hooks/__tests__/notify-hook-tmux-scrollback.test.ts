@@ -63,6 +63,14 @@ if [[ "$cmd" == "display-message" ]]; then
     echo "${cwd}"
     exit 0
   fi
+  if [[ "$format" == "#{pane_current_command}" ]]; then
+    echo "node"
+    exit 0
+  fi
+  if [[ "$format" == "#{pane_start_command}" ]]; then
+    echo "codex --model gpt-5"
+    exit 0
+  fi
   if [[ "$format" == "#S" ]]; then
     echo "devsess"
     exit 0

@@ -51,6 +51,27 @@ if [[ "$cmd" == "send-keys" ]]; then
   exit 0
 fi
 if [[ "$cmd" == "display-message" ]]; then
+  target=""
+  format=""
+  while (($#)); do
+    case "$1" in
+      -p) shift ;;
+      -t) target="$2"; shift 2 ;;
+      *) format="$1"; shift ;;
+    esac
+  done
+  if [[ "$format" == "#{pane_current_command}" && "$target" == "%99" ]]; then
+    echo "node"
+    exit 0
+  fi
+  if [[ "$format" == "#{pane_start_command}" && "$target" == "%99" ]]; then
+    echo "codex --model gpt-5"
+    exit 0
+  fi
+  if [[ "$format" == "#S" ]]; then
+    echo "devsess"
+    exit 0
+  fi
   exit 0
 fi
 if [[ "$cmd" == "list-panes" ]]; then

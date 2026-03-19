@@ -47,16 +47,29 @@ if [[ "\$cmd" == "send-keys" ]]; then
   exit 0
 fi
 if [[ "\$cmd" == "display-message" ]]; then
+  target=""
   format=""
   while [[ "\$#" -gt 0 ]]; do
     case "\$1" in
       -p) shift ;;
-      -t) shift 2 ;;
+      -t) target="\$2"; shift 2 ;;
       *) format="\$1"; shift ;;
     esac
   done
   if [[ "\$format" == "#{pane_in_mode}" ]]; then
     echo "${paneInMode}"
+    exit 0
+  fi
+  if [[ "\$format" == "#{pane_current_command}" && "\$target" == "%99" ]]; then
+    echo "node"
+    exit 0
+  fi
+  if [[ "\$format" == "#{pane_start_command}" && "\$target" == "%99" ]]; then
+    echo "codex --model gpt-5"
+    exit 0
+  fi
+  if [[ "\$format" == "#S" ]]; then
+    echo "devsess"
     exit 0
   fi
   exit 0
@@ -309,7 +322,7 @@ exit 0
 
       const tmuxLog = await readFile(tmuxLogPath, 'utf-8');
       assert.match(tmuxLog, /display-message -t %99 -p #\{pane_current_command\}/);
-      assert.match(tmuxLog, /send-keys -t %99 -l yes, proceed \[OMX_TMUX_INJECT\]/, 'current implementation still nudges this pane');
+      assert.doesNotMatch(tmuxLog, /send-keys -t %99 -l yes, proceed \[OMX_TMUX_INJECT\]/, 'shell pane should not receive auto-nudge injection');
     });
   });
 
@@ -388,7 +401,7 @@ if [[ "$cmd" == "list-panes" ]]; then
     esac
   done
   if [[ "$target" == "devsess" ]]; then
-    printf "%%99\tsh\t0\t${cwd}\\n%%100\tnode\t1\t${cwd}\\n"
+    printf "%%99\t1\tsh\\n%%100\t0\tcodex --model gpt-5\\n"
     exit 0
   fi
   echo "%1 12345"
@@ -407,7 +420,7 @@ exit 0
       const tmuxLog = await readFile(tmuxLogPath, 'utf-8');
       assert.match(tmuxLog, /display-message -p #S/);
       assert.match(tmuxLog, /display-message -t %99 -p #\{pane_current_command\}/);
-      assert.match(tmuxLog, /send-keys -t %99 -l yes, proceed \[OMX_TMUX_INJECT\]/);
+      assert.match(tmuxLog, /send-keys -t %100 -l yes, proceed \[OMX_TMUX_INJECT\]/);
     });
   });
 
