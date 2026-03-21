@@ -991,6 +991,132 @@ exit 0
     });
   });
 
+  it('does not nudge completed teams on reopen even when config and idle worker state still exist', async () => {
+    await withTempWorkingDir(async (cwd) => {
+      const omxDir = join(cwd, '.omx');
+      const stateDir = join(omxDir, 'state');
+      const logsDir = join(omxDir, 'logs');
+      const teamName = 'completed-reopen';
+      const teamDir = join(stateDir, 'team', teamName);
+      const workersDir = join(teamDir, 'workers');
+      const fakeBinDir = join(cwd, 'fake-bin');
+      const fakeTmuxPath = join(fakeBinDir, 'tmux');
+      const tmuxLogPath = join(cwd, 'tmux.log');
+      const completedAt = '2026-03-21T08:40:35.471Z';
+
+      await mkdir(logsDir, { recursive: true });
+      await mkdir(workersDir, { recursive: true });
+      await mkdir(fakeBinDir, { recursive: true });
+
+      await writeJson(join(stateDir, 'team-state.json'), {
+        active: false,
+        team_name: teamName,
+        current_phase: 'complete',
+        completed_at: completedAt,
+      });
+      await writeJson(join(teamDir, 'config.json'), {
+        name: teamName,
+        tmux_session: 'completed-reopen:0',
+        leader_pane_id: '%91',
+        workers: [
+          { name: 'worker-1', index: 1, pane_id: '%10', role: 'executor' },
+          { name: 'worker-2', index: 2, pane_id: '%11', role: 'executor' },
+        ],
+      });
+      await writeJson(join(teamDir, 'phase.json'), {
+        current_phase: 'complete',
+        transitions: [{ from: 'team-verify', to: 'complete', at: completedAt }],
+        updated_at: completedAt,
+      });
+      for (const worker of ['worker-1', 'worker-2']) {
+        await mkdir(join(workersDir, worker), { recursive: true });
+        await writeJson(join(workersDir, worker, 'status.json'), {
+          state: 'idle',
+          updated_at: new Date().toISOString(),
+        });
+      }
+
+      await writeFile(fakeTmuxPath, buildFakeTmux(tmuxLogPath));
+      await chmod(fakeTmuxPath, 0o755);
+
+      const result = runNotifyHook(cwd, fakeBinDir);
+      assert.equal(result.status, 0, `notify-hook failed: ${result.stderr || result.stdout}`);
+
+      if (existsSync(tmuxLogPath)) {
+        const tmuxLog = await readFile(tmuxLogPath, 'utf-8');
+        assert.doesNotMatch(tmuxLog, /send-keys/, 'completed teams must not re-nudge on reopen');
+      }
+    });
+  });
+
+  it('does not nudge a team owned by another session', async () => {
+    await withTempWorkingDir(async (cwd) => {
+      const omxDir = join(cwd, '.omx');
+      const stateDir = join(omxDir, 'state');
+      const logsDir = join(omxDir, 'logs');
+      const teamName = 'other-session-team';
+      const teamDir = join(stateDir, 'team', teamName);
+      const workersDir = join(teamDir, 'workers');
+      const fakeBinDir = join(cwd, 'fake-bin');
+      const fakeTmuxPath = join(fakeBinDir, 'tmux');
+      const tmuxLogPath = join(cwd, 'tmux.log');
+      const nowIso = new Date().toISOString();
+
+      await mkdir(logsDir, { recursive: true });
+      await mkdir(workersDir, { recursive: true });
+      await mkdir(fakeBinDir, { recursive: true });
+
+      await writeJson(join(stateDir, 'session.json'), { session_id: 'sess-current' });
+      await writeJson(join(stateDir, 'team-state.json'), {
+        active: true,
+        team_name: teamName,
+        current_phase: 'team-exec',
+      });
+      await writeJson(join(teamDir, 'manifest.v2.json'), {
+        schema_version: 2,
+        name: teamName,
+        task: 'session ownership repro',
+        leader: {
+          session_id: 'sess-other',
+          worker_id: 'leader-fixed',
+          role: 'coordinator',
+        },
+        policy: {
+          worker_launch_mode: 'interactive',
+          display_mode: 'split_pane',
+          dispatch_mode: 'hook_preferred_with_fallback',
+          dispatch_ack_timeout_ms: 2000,
+        },
+        tmux_session: 'other-session-team:0',
+        leader_pane_id: '%94',
+        worker_count: 2,
+        workers: [
+          { name: 'worker-1', index: 1, pane_id: '%10', role: 'executor' },
+          { name: 'worker-2', index: 2, pane_id: '%11', role: 'executor' },
+        ],
+        created_at: nowIso,
+      });
+      for (const worker of ['worker-1', 'worker-2']) {
+        await mkdir(join(workersDir, worker), { recursive: true });
+        await writeJson(join(workersDir, worker, 'status.json'), {
+          state: 'idle',
+          updated_at: nowIso,
+        });
+      }
+
+      await writeFile(fakeTmuxPath, buildFakeTmux(tmuxLogPath));
+      await chmod(fakeTmuxPath, 0o755);
+
+      const result = runNotifyHook(cwd, fakeBinDir);
+      assert.equal(result.status, 0, `notify-hook failed: ${result.stderr || result.stdout}`);
+
+      if (existsSync(tmuxLogPath)) {
+        const tmuxLog = await readFile(tmuxLogPath, 'utf-8');
+        assert.doesNotMatch(tmuxLog, /send-keys/, 'must not nudge teams owned by another session');
+      }
+    });
+  });
+
   it('nudges when worker panes are alive and leader is stale (no recent HUD turn)', async () => {
     await withTempWorkingDir(async (cwd) => {
       const omxDir = join(cwd, '.omx');

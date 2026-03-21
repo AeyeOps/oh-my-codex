@@ -11,7 +11,7 @@ import { readJsonIfExists, getScopedStateDirsForCurrentSession } from './state-i
 import { runProcess } from './process-runner.js';
 import { logTmuxHookEvent } from './log.js';
 import { evaluatePaneInjectionReadiness, sendPaneInput } from './team-tmux-guard.js';
-import { DEFAULT_MARKER, resolveCodexPane } from '../tmux-hook-engine.js';
+import { DEFAULT_MARKER } from '../tmux-hook-engine.js';
 import { isLeaderRuntimeStale } from '../../team/leader-activity.js';
 const LEADER_PANE_MISSING_NO_INJECTION_REASON = 'leader_pane_missing_no_injection';
 const LEADER_PANE_SHELL_NO_INJECTION_REASON = 'leader_pane_shell_no_injection';
@@ -196,6 +196,26 @@ async function syncScopedTeamStateFromPhase(teamStatePath, teamName, phaseSnapsh
     return changed;
   } catch {
     return false;
+  }
+}
+
+async function resolveCurrentSessionId(stateDir) {
+  const fromEnv = safeString(
+    process.env.OMX_SESSION_ID
+    || process.env.CODEX_SESSION_ID
+    || process.env.SESSION_ID
+    || '',
+  ).trim();
+  if (fromEnv) return fromEnv;
+
+  const sessionPath = join(stateDir, 'session.json');
+  try {
+    if (!existsSync(sessionPath)) return '';
+    const parsed = JSON.parse(await readFile(sessionPath, 'utf-8'));
+    const sessionId = safeString(parsed && parsed.session_id ? parsed.session_id : '').trim();
+    return sessionId;
+  } catch {
+    return '';
   }
 }
 
@@ -475,6 +495,7 @@ export async function maybeNudgeTeamLeader({ cwd, stateDir, logsDir, preComputed
   }
 
   const candidateTeamNames = new Set();
+  const currentSessionId = await resolveCurrentSessionId(stateDir);
   try {
     const scopedDirs = await getScopedStateDirsForCurrentSession(stateDir);
     const candidateStateDirs = [...new Set([...scopedDirs, stateDir])];
@@ -489,8 +510,9 @@ export async function maybeNudgeTeamLeader({ cwd, stateDir, logsDir, preComputed
       const phaseSnapshot = await readTeamPhaseSnapshot(stateDir, teamName, nowIso);
       if (phaseSnapshot.terminal) {
         await syncScopedTeamStateFromPhase(teamStatePath, teamName, phaseSnapshot, nowIso);
+        continue;
       }
-      if (parsed.active === true || phaseSnapshot.terminal) {
+      if (parsed.active === true) {
         candidateTeamNames.add(teamName);
       }
     }
@@ -504,6 +526,7 @@ export async function maybeNudgeTeamLeader({ cwd, stateDir, logsDir, preComputed
   for (const teamName of candidateTeamNames) {
     let tmuxSession = '';
     let leaderPaneId = '';
+    let ownerSessionId = '';
     let workers = [];
     try {
       const manifestPath = join(omxDir, 'state', 'team', teamName, 'manifest.v2.json');
@@ -513,11 +536,13 @@ export async function maybeNudgeTeamLeader({ cwd, stateDir, logsDir, preComputed
         const raw = JSON.parse(await readFile(srcPath, 'utf-8'));
         tmuxSession = safeString(raw && raw.tmux_session ? raw.tmux_session : '').trim();
         leaderPaneId = safeString(raw && raw.leader_pane_id ? raw.leader_pane_id : '').trim();
+        ownerSessionId = safeString(raw && raw.leader && raw.leader.session_id ? raw.leader.session_id : '').trim();
         if (Array.isArray(raw && raw.workers)) workers = raw.workers;
       }
     } catch {
       // ignore
     }
+    if (currentSessionId && ownerSessionId && ownerSessionId !== currentSessionId) continue;
     let mailbox = null;
     try {
       const mailboxPath = join(omxDir, 'state', 'team', teamName, 'mailbox', 'leader-fixed.json');
@@ -535,7 +560,7 @@ export async function maybeNudgeTeamLeader({ cwd, stateDir, logsDir, preComputed
     const workerPaneIds = Array.isArray(workers)
       ? workers.map((w) => safeString(w && w.pane_id ? w.pane_id : '')).filter(Boolean)
       : [];
-    const canonicalLeaderPaneId = safeString(resolveCodexPane() || leaderPaneId).trim();
+    const canonicalLeaderPaneId = safeString(leaderPaneId).trim();
     if (!tmuxSession && !canonicalLeaderPaneId) continue;
     const tmuxTarget = canonicalLeaderPaneId;
     const paneStatus = tmuxSession
