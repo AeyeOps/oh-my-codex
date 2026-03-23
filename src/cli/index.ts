@@ -2575,7 +2575,6 @@ async function cancelModes(): Promise<void> {
     const ralphLinksUltrawork = (state: Record<string, unknown>): boolean =>
       state.linked_ultrawork === true || state.linked_mode === "ultrawork";
 
-    const team = states.get("team");
     const ralph = states.get("ralph");
     const hadActiveRalph = !!(ralph && ralph.state.active === true);
     if (ralph && ralph.state.active === true) {

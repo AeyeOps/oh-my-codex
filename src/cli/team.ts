@@ -2097,7 +2097,7 @@ export function buildLeaderMonitoringHints(teamName: string): string[] {
   ];
 }
 
-export async function teamCommand(args: string[], options: TeamCliOptions = {}): Promise<void> {
+export async function teamCommand(args: string[], _options: TeamCliOptions = {}): Promise<void> {
   const cwd = process.cwd();
   const parsedWorktree = parseWorktreeMode(args);
   const worktreeMode = resolveDefaultTeamWorktreeMode(parsedWorktree.mode);

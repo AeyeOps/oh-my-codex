@@ -1,6 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve as resolvePath } from 'node:path';
-import { readModeState } from '../modes/base.js';
 import { sendWorkerMessage, shutdownTeam } from './runtime.js';
 import {
   TEAM_NAME_SAFE_PATTERN,

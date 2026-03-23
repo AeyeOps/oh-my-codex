@@ -66,7 +66,6 @@ import {
   type WorkerHeartbeat,
   type WorkerStatus,
   type TeamTask,
-  type TeamManifestV2,
   type TeamMonitorSnapshotState,
   type TeamPhaseState,
   type TeamWorkerIntegrationState,
@@ -2410,7 +2409,6 @@ export async function resumeTeam(teamName: string, cwd: string): Promise<TeamRun
   const sanitized = sanitizeTeamName(teamName);
   const config = await readTeamConfig(sanitized, cwd);
   if (!config) return null;
-  const manifest = await readTeamManifestV2(sanitized, cwd);
   config.lifecycle_profile = 'default';
 
   if (config.worker_launch_mode === 'prompt') {
