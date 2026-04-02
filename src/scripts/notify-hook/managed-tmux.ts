@@ -227,11 +227,34 @@ export async function verifyManagedPaneTarget(paneId: string, cwd: string, paylo
   }
 }
 
+
+async function readManagedPaneCommandState(paneTarget: string): Promise<{ currentCommand: string; startCommand: string }> {
+  try {
+    const [currentResult, startResult] = await Promise.all([
+      runProcess('tmux', ['display-message', '-p', '-t', paneTarget, '#{pane_current_command}'], 2000),
+      runProcess('tmux', ['display-message', '-p', '-t', paneTarget, '#{pane_start_command}'], 2000),
+    ]);
+    return {
+      currentCommand: safeString(currentResult.stdout).trim().toLowerCase(),
+      startCommand: safeString(startResult.stdout).trim().toLowerCase(),
+    };
+  } catch {
+    return { currentCommand: '', startCommand: '' };
+  }
+}
+
+function paneLooksLikeManagedAgent({ currentCommand, startCommand }: { currentCommand: string; startCommand: string }): boolean {
+  if (/omx.*hud.*--watch/i.test(startCommand)) return false;
+  if (startCommand.includes('codex')) return true;
+  return currentCommand === 'codex' || currentCommand === 'node' || currentCommand === 'npx';
+}
 export async function resolveManagedCurrentPane(cwd: string, payload: any, { allowTeamWorker = false } = {}): Promise<string> {
   const paneTarget = safeString(process.env.TMUX_PANE || '').trim();
   if (!paneTarget) return '';
   const verdict = await verifyManagedPaneTarget(paneTarget, cwd, payload, { allowTeamWorker });
-  return verdict.ok ? paneTarget : '';
+  if (!verdict.ok) return '';
+  const commandState = await readManagedPaneCommandState(paneTarget);
+  return paneLooksLikeManagedAgent(commandState) ? paneTarget : '';
 }
 
 export async function resolveManagedSessionPane(cwd: string, payload: any): Promise<string> {
