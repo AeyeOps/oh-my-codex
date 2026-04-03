@@ -416,6 +416,50 @@ describe('notify-hook auto-nudge', () => {
     });
   });
 
+  it('does not auto-nudge when tmux session naming drifts from the current OMX session id', async () => {
+    await withTempWorkingDir(async (cwd) => {
+      const omxDir = join(cwd, '.omx');
+      const stateDir = join(omxDir, 'state');
+      const logsDir = join(omxDir, 'logs');
+      const codexHome = join(cwd, 'codex-home');
+      const fakeBinDir = join(cwd, 'fake-bin');
+      const tmuxLogPath = join(cwd, 'tmux.log');
+      const expectedManagedSessionName = buildTmuxSessionName(cwd, 'sess-managed');
+      const mismatchedDetachedSessionName = buildTmuxSessionName(cwd, 'sess-legacy-detached');
+
+      await mkdir(logsDir, { recursive: true });
+      await mkdir(stateDir, { recursive: true });
+      await mkdir(codexHome, { recursive: true });
+      await mkdir(fakeBinDir, { recursive: true });
+
+      await writeJson(join(codexHome, '.omx-config.json'), {
+        autoNudge: { enabled: true, delaySec: 0, stallMs: 0 },
+      });
+
+      await writeManagedSessionState(stateDir, cwd);
+
+      await writeFile(join(fakeBinDir, 'tmux'), buildFakeTmux(tmuxLogPath));
+      await chmod(join(fakeBinDir, 'tmux'), 0o755);
+
+      const result = runNotifyHook(cwd, fakeBinDir, codexHome, {
+        'session-id': 'sess-managed',
+        'last-assistant-message': 'I analyzed the code. If you want me to make these changes, let me know.',
+      }, {
+        OMX_SESSION_ID: 'sess-managed',
+        OMX_TEST_TMUX_SESSION_NAME: mismatchedDetachedSessionName,
+      });
+      assert.equal(result.status, 0, `hook failed: ${result.stderr || result.stdout}`);
+
+      const tmuxLog = await readFile(tmuxLogPath, 'utf-8');
+      assert.match(
+        tmuxLog,
+        new RegExp(`list-panes -s -t ${escapeRegex(expectedManagedSessionName)}`),
+        'should resolve panes against the current OMX session identity, not the drifted tmux session name',
+      );
+      assert.doesNotMatch(tmuxLog, /send-keys -t %99 -l yes, proceed \[OMX_TMUX_INJECT\]/);
+    });
+  });
+
   it('sends nudge via capture-pane fallback when payload has no stall pattern', async () => {
     await withTempWorkingDir(async (cwd) => {
       const omxDir = join(cwd, '.omx');

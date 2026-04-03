@@ -1332,6 +1332,13 @@ export function buildTmuxSessionName(cwd: string, sessionId: string): string {
   return name.length > 120 ? name.slice(0, 120) : name;
 }
 
+export function buildDetachedTmuxSessionName(
+  cwd: string,
+  sessionId: string,
+): string {
+  return buildTmuxSessionName(cwd, sessionId);
+}
+
 function parsePaneIdFromTmuxOutput(rawOutput: string): string | null {
   const paneId = rawOutput.split("\n")[0]?.trim() || "";
   return paneId.startsWith("%") ? paneId : null;
@@ -1798,8 +1805,7 @@ function runCodex(
     const detachedWindowsCodexCmd = nativeWindows
       ? buildWindowsPromptCommand("codex", launchArgs)
       : null;
-    const tmuxSessionId = `omx-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const sessionName = buildTmuxSessionName(cwd, tmuxSessionId);
+    const sessionName = buildDetachedTmuxSessionName(cwd, sessionId);
     let createdDetachedSession = false;
     let registeredHookTarget: string | null = null;
     let registeredHookName: string | null = null;

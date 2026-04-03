@@ -28,6 +28,7 @@ import {
   readPersistedSetupScope,
   resolveCodexHomeForLaunch,
   buildDetachedSessionBootstrapSteps,
+  buildDetachedTmuxSessionName,
   buildDetachedSessionFinalizeSteps,
   buildDetachedSessionRollbackSteps,
   resolveNotifyTempContract,
@@ -1171,6 +1172,16 @@ describe("buildTmuxSessionName", () => {
       "omx-789-ghi",
     );
     assert.match(name, /^omx-my-repo-autoresearch-demo-/);
+  });
+});
+
+describe("buildDetachedTmuxSessionName", () => {
+  it("reuses the OMX session id for the detached tmux session name", () => {
+    const sessionName = buildDetachedTmuxSessionName(
+      "/tmp/My Repo",
+      "omx-1770992424158-abc123",
+    );
+    assert.equal(sessionName, "omx-my-repo-detached-1770992424158-abc123");
   });
 });
 
