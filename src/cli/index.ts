@@ -344,6 +344,16 @@ export function resolveCodexHomeForLaunch(
   return undefined;
 }
 
+export function resolveCodexConfigPathForLaunch(
+  cwd: string,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  const codexHomeOverride = resolveCodexHomeForLaunch(cwd, env);
+  return codexHomeOverride
+    ? join(codexHomeOverride, "config.toml")
+    : codexConfigPath();
+}
+
 export function resolveSetupScopeArg(args: string[]): SetupScope | undefined {
   let value: string | undefined;
   for (let index = 0; index < args.length; index += 1) {
@@ -932,7 +942,7 @@ export async function launchWithHud(args: string[]): Promise<void> {
   // TOML parser rejects duplicates, so we repair before spawning the CLI.
   try {
     const repaired = await repairConfigIfNeeded(
-      codexConfigPath(),
+      resolveCodexConfigPathForLaunch(launchCwd, process.env),
       getPackageRoot(),
     );
     if (repaired) {
@@ -1013,7 +1023,7 @@ export async function execWithOverlay(args: string[]): Promise<void> {
 
   try {
     const repaired = await repairConfigIfNeeded(
-      codexConfigPath(),
+      resolveCodexConfigPathForLaunch(launchCwd, process.env),
       getPackageRoot(),
     );
     if (repaired) {

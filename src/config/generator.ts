@@ -55,6 +55,17 @@ const OMX_TUI_STATUS_LINE =
 const LEGACY_OMX_TEAM_RUN_TABLE_PATTERN =
   /^\s*\[mcp_servers\.(?:"omx_team_run"|omx_team_run)\]\s*$/m;
 
+function isOmxMcpServerSection(tableName: string): boolean {
+  const m = tableName.match(/^mcp_servers\.(?:"([^"]+)"|([A-Za-z0-9_-]+))$/);
+  if (!m) return false;
+  const name = m[1] || m[2] || "";
+  return name.startsWith("omx_");
+}
+
+export function hasLegacyOmxTeamRunTable(config: string): boolean {
+  return LEGACY_OMX_TEAM_RUN_TABLE_PATTERN.test(config);
+}
+
 function unwrapTomlString(value: string | undefined): string | undefined {
   return value?.match(/^"(.*)"$/)?.[1];
 }
@@ -466,7 +477,7 @@ function stripOrphanedOmxSections(config: string): string {
       // The marker-based stripExistingOmxBlocks already handles [tui]
       // when it lives inside the OMX marker block.
       const isOmxSection =
-        /^mcp_servers\.omx_/.test(tableName) ||
+        isOmxMcpServerSection(tableName) ||
         isLegacyOmxAgentSection(tableName);
 
       if (isOmxSection) {
@@ -873,7 +884,7 @@ export async function repairConfigIfNeeded(
 
   const content = await readFile(configPath, "utf-8");
   const tuiCount = (content.match(/^\s*\[tui\]\s*$/gm) || []).length;
-  const hasLegacyTeamRunTable = LEGACY_OMX_TEAM_RUN_TABLE_PATTERN.test(content);
+  const hasLegacyTeamRunTable = hasLegacyOmxTeamRunTable(content);
   if (tuiCount <= 1 && !hasLegacyTeamRunTable) return false;
 
   // Managed config compatibility issue detected — run full merge to repair

@@ -28,6 +28,7 @@ import {
   resolveSetupScopeArg,
   readPersistedSetupPreferences,
   readPersistedSetupScope,
+  resolveCodexConfigPathForLaunch,
   resolveCodexHomeForLaunch,
   buildDetachedSessionBootstrapSteps,
   buildDetachedTmuxSessionName,
@@ -1027,6 +1028,23 @@ describe("project launch scope helpers", () => {
     }
   });
 
+  it("uses project config.toml for launch repair when persisted scope is project", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-launch-scope-"));
+    try {
+      await mkdir(join(wd, ".omx"), { recursive: true });
+      await writeFile(
+        join(wd, ".omx", "setup-scope.json"),
+        JSON.stringify({ scope: "project" }),
+      );
+      assert.equal(
+        resolveCodexConfigPathForLaunch(wd, {}),
+        join(wd, ".codex", "config.toml"),
+      );
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
   it("keeps explicit CODEX_HOME override from env", async () => {
     const wd = await mkdtemp(join(tmpdir(), "omx-launch-scope-"));
     try {
@@ -1040,6 +1058,25 @@ describe("project launch scope helpers", () => {
           CODEX_HOME: "/tmp/explicit-codex-home",
         }),
         "/tmp/explicit-codex-home",
+      );
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("uses explicit CODEX_HOME config.toml for launch repair overrides", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-launch-scope-"));
+    try {
+      await mkdir(join(wd, ".omx"), { recursive: true });
+      await writeFile(
+        join(wd, ".omx", "setup-scope.json"),
+        JSON.stringify({ scope: "project" }),
+      );
+      assert.equal(
+        resolveCodexConfigPathForLaunch(wd, {
+          CODEX_HOME: "/tmp/explicit-codex-home",
+        }),
+        "/tmp/explicit-codex-home/config.toml",
       );
     } finally {
       await rm(wd, { recursive: true, force: true });
