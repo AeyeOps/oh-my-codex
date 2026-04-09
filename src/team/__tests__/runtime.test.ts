@@ -1633,21 +1633,21 @@ process.on('SIGTERM', () => process.exit(0));
 			join(process.cwd(), "src", "team", "runtime.ts"),
 			"utf-8",
 		);
-		const applyIndex = source.indexOf(
-			"applyCreatedInteractiveSessionToConfig(config, createdSession, workerPaneIds);",
+		const applyMatch = source.match(
+			/applyCreatedInteractiveSessionToConfig\(\s*config,\s*createdSession,\s*workerPaneIds,\s*\);/m,
 		);
-		const saveIndex = source.indexOf(
-			"await saveTeamConfig(config, leaderCwd);",
-			applyIndex,
-		);
-		const readyIndex = source.indexOf(
-			"const ready = waitForWorkerReady(sessionName, i, workerReadyTimeoutMs, paneId);",
-			saveIndex,
+		const saveMatch = source.match(/await saveTeamConfig\(config, leaderCwd\);/m);
+		const readyMatch = source.match(
+			/const ready = waitForWorkerReady\(/m,
 		);
 
-		assert.notEqual(applyIndex, -1);
-		assert.notEqual(saveIndex, -1);
-		assert.notEqual(readyIndex, -1);
+		const applyIndex = applyMatch?.index ?? -1;
+		const saveIndex = saveMatch?.index ?? -1;
+		const readyIndex = readyMatch?.index ?? -1;
+
+		assert.notEqual(applyMatch, null);
+		assert.notEqual(saveMatch, null);
+		assert.notEqual(readyMatch, null);
 		assert.equal(applyIndex < saveIndex, true);
 		assert.equal(saveIndex < readyIndex, true);
 	});
