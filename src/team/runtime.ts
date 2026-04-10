@@ -3617,14 +3617,17 @@ async function dispatchCriticalInboxInstruction(params: {
           request_id: queued.request_id,
         };
       }
-      await transitionDispatchRequest(
-        teamName,
-        queued.request_id,
-        'pending',
-        'failed',
-        { last_reason: `fallback_confirmed_after_failed_receipt:${fallback.reason}` },
-        cwd,
-      ).catch(() => {});
+      const current = await readDispatchRequest(teamName, queued.request_id, cwd);
+      if (current) {
+        await transitionDispatchRequest(
+          teamName,
+          queued.request_id,
+          current.status,
+          'failed',
+          { last_reason: `fallback_confirmed_after_failed_receipt:${fallback.reason}` },
+          cwd,
+        ).catch(() => {});
+      }
       return {
         ok: true,
         transport: fallback.transport,
@@ -3690,14 +3693,17 @@ async function dispatchCriticalInboxInstruction(params: {
       cwd,
     );
     if (!marked) {
-      await transitionDispatchRequest(
-        teamName,
-        queued.request_id,
-        'pending',
-        'failed',
-        { last_reason: `fallback_confirmed_after_failed_receipt:${fallback.reason}` },
-        cwd,
-      ).catch(() => {});
+      const current = await readDispatchRequest(teamName, queued.request_id, cwd);
+      if (current) {
+        await transitionDispatchRequest(
+          teamName,
+          queued.request_id,
+          current.status,
+          'failed',
+          { last_reason: `fallback_confirmed_after_failed_receipt:${fallback.reason}` },
+          cwd,
+        ).catch(() => {});
+      }
     }
     return {
       ok: true,
@@ -3805,14 +3811,17 @@ async function finalizeHookPreferredMailboxDispatch(params: {
   if (receipt?.status === 'failed') {
     if (fallback.ok) {
       await markMessageNotified(teamName, workerName, messageId, cwd).catch(() => false);
-      await transitionDispatchRequest(
-        teamName,
-        requestId,
-        'failed',
-        'failed',
-        { message_id: messageId, last_reason: `fallback_confirmed_after_failed_receipt:${fallback.reason}` },
-        cwd,
-      ).catch(() => null);
+      const current = await readDispatchRequest(teamName, requestId, cwd);
+      if (current) {
+        await transitionDispatchRequest(
+          teamName,
+          requestId,
+          current.status,
+          'failed',
+          { message_id: messageId, last_reason: `fallback_confirmed_after_failed_receipt:${fallback.reason}` },
+          cwd,
+        ).catch(() => null);
+      }
       const outcome = {
         ok: true,
         transport: fallback.transport,
@@ -3869,14 +3878,17 @@ async function finalizeHookPreferredMailboxDispatch(params: {
       cwd,
     );
     if (!marked) {
-      await transitionDispatchRequest(
-        teamName,
-        requestId,
-        'failed',
-        'failed',
-        { message_id: messageId, last_reason: `fallback_confirmed_after_failed_receipt:${fallback.reason}` },
-        cwd,
-      ).catch(() => {});
+      const current = await readDispatchRequest(teamName, requestId, cwd);
+      if (current) {
+        await transitionDispatchRequest(
+          teamName,
+          requestId,
+          current.status,
+          'failed',
+          { message_id: messageId, last_reason: `fallback_confirmed_after_failed_receipt:${fallback.reason}` },
+          cwd,
+        ).catch(() => {});
+      }
     }
     const outcome = {
       ok: true,
