@@ -30,7 +30,6 @@ import {
 } from './notify-hook/payload-parser.js';
 import {
   getScopedStatePath,
-  readJsonIfExists,
   readScopedJsonIfExists,
   getScopedStateDirsForCurrentSession,
   normalizeNotifyState,

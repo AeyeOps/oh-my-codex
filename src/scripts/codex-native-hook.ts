@@ -17,7 +17,7 @@ import {
   writeTeamLeaderAttention,
   writeTeamPhase,
 } from "../team/state.js";
-import { omxNotepadPath, omxProjectMemoryPath, omxStateDir } from "../utils/paths.js";
+import { omxNotepadPath, omxProjectMemoryPath } from "../utils/paths.js";
 import { getStateFilePath } from "../mcp/state-paths.js";
 import {
   detectKeywords,

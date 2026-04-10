@@ -16,7 +16,6 @@ import {
   resolveAutoNudgeSignature,
 } from './notify-hook/auto-nudge.js';
 import {
-  getScopedStatePath,
   readScopedJsonIfExists,
 } from './notify-hook/state-io.js';
 import { checkPaneReadyForTeamSendKeys } from './notify-hook/team-tmux-guard.js';
@@ -1212,7 +1211,6 @@ async function readAutoNudgeState(): Promise<Record<string, unknown> | null> {
 async function runFallbackAutoNudgeTick(): Promise<void> {
   const now = Date.now();
   const nowIso = new Date(now).toISOString();
-  const hudStatePath = await getScopedStatePath(stateDir, 'hud-state.json', undefined);
   const hudState = await readScopedJsonIfExists(stateDir, 'hud-state.json', undefined, null);
 
   lastFallbackAutoNudge = {
