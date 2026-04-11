@@ -14,6 +14,7 @@
 **Website:** https://yeachan-heo.github.io/oh-my-codex-website/
 **Docs:** [Getting Started](./docs/getting-started.html) · [Agents](./docs/agents.html) · [Skills](./docs/skills.html) · [Integrations](./docs/integrations.html) · [Demo](./DEMO.md) · [OpenClaw guide](./docs/openclaw-integration.md)
 **Community:** [Discord](https://discord.gg/PUwSMR9XNk) — shared OMX/community server for oh-my-codex and related tooling.
+**Official X:** https://x.com/bloatedaislop?s=21
 
 OMX is a workflow layer for [OpenAI Codex CLI](https://github.com/openai/codex).
 
