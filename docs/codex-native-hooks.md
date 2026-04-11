@@ -46,6 +46,16 @@ OMX only owns the wrapper entries that invoke `dist/scripts/codex-native-hook.js
 | `session-end` | none | `session-end` | runtime-fallback | Still emitted from runtime/notify path, not native Codex hooks |
 | `session-idle` | none | `session-idle` | runtime-fallback | Still emitted from runtime/notify path, not native Codex hooks |
 
+## Project wiki addendum (approved v1 backport)
+
+The approved OMX-native wiki backport keeps lifecycle ownership intentionally narrow:
+
+- **Storage** lives under `.omx/wiki/`, not `.omc/wiki/`.
+- **SessionStart** may surface bounded wiki context from `.omx/wiki/` when the wiki already exists, but it should stay read-mostly and must not block the native hook path on expensive writes or index rebuilds.
+- **SessionEnd** remains a runtime/notify-path responsibility for best-effort, non-blocking session capture into `.omx/wiki/`.
+- **PreCompact parity is intentionally deferred** in v1 unless a clearly OMX-native compaction seam exists.
+- **Routing should stay explicit**: prefer `$wiki` or task verbs like `wiki query` / `wiki add`, and avoid implicit bare `wiki` noun activation.
+
 ## Combined workflow note
 
 Stop/continuation readers must interpret approved combined workflow state from
