@@ -185,6 +185,8 @@ For non-team sessions, native Codex hooks are now the canonical lifecycle surfac
 - `.omx/hooks/*.mjs` = OMX plugin hooks
 - `omx tmux-hook` / notify-hook / derived watcher = tmux + runtime fallback paths
 
+Need one plain Codex session without the OMX harness? Launch Codex with `OMX_NATIVE_HOOKS=0` to disable OMX-managed native hook behavior just for that process tree, without uninstalling OMX or changing other sessions.
+
 See [Codex native hook mapping](./docs/codex-native-hooks.md) for the current native / fallback matrix.
 
 ### Explore and sparkshell

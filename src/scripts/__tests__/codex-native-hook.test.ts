@@ -19,6 +19,8 @@ import {
 } from "../codex-native-hook.js";
 import { writeSessionStart } from "../../hooks/session.js";
 
+const OMX_NATIVE_HOOKS_ENV = "OMX_NATIVE_HOOKS";
+
 async function writeJson(path: string, value: unknown): Promise<void> {
   await mkdir(dirname(path), { recursive: true }).catch(() => {});
   await writeFile(path, JSON.stringify(value, null, 2));
@@ -76,8 +78,11 @@ const TEAM_ENV_KEYS = [
 ] as const;
 
 const priorTeamEnv = new Map<(typeof TEAM_ENV_KEYS)[number], string | undefined>();
+let priorNativeHooksEnv: string | undefined;
 
 beforeEach(() => {
+  priorNativeHooksEnv = process.env[OMX_NATIVE_HOOKS_ENV];
+  delete process.env[OMX_NATIVE_HOOKS_ENV];
   priorTeamEnv.clear();
   for (const key of TEAM_ENV_KEYS) {
     priorTeamEnv.set(key, process.env[key]);
@@ -86,6 +91,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  if (typeof priorNativeHooksEnv === "string") process.env[OMX_NATIVE_HOOKS_ENV] = priorNativeHooksEnv;
+  else delete process.env[OMX_NATIVE_HOOKS_ENV];
   for (const key of TEAM_ENV_KEYS) {
     const value = priorTeamEnv.get(key);
     if (typeof value === "string") process.env[key] = value;
@@ -162,6 +169,32 @@ describe("codex native hook dispatch", () => {
       String(output.hookSpecificOutput?.additionalContext ?? ""),
       /stdin JSON parsing failed inside codex-native-hook:/,
     );
+  });
+
+  it("returns no output and skips OMX side effects when native hooks are disabled for the launch", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-native-hook-disabled-"));
+    try {
+      process.env[OMX_NATIVE_HOOKS_ENV] = "0";
+
+      const result = await dispatchCodexNativeHook(
+        {
+          hook_event_name: "SessionStart",
+          cwd,
+          session_id: "sess-disabled-1",
+        },
+        {
+          cwd,
+          sessionOwnerPid: 43210,
+        },
+      );
+
+      assert.equal(result.hookEventName, "SessionStart");
+      assert.equal(result.omxEventName, "session-start");
+      assert.equal(result.outputJson, null);
+      assert.equal(existsSync(join(cwd, ".omx", "state", "session.json")), false);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
   });
 
   it("maps Codex events onto OMX logical surfaces", () => {

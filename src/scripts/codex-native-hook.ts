@@ -71,6 +71,8 @@ const TERMINAL_MODE_PHASES = new Set(["complete", "failed", "cancelled"]);
 const SKILL_STOP_BLOCKERS = new Set(["ralplan"]);
 const TEAM_TERMINAL_TASK_STATUSES = new Set(["completed", "failed"]);
 const NATIVE_STOP_STATE_FILE = "native-stop-state.json";
+const OMX_NATIVE_HOOKS_ENV = "OMX_NATIVE_HOOKS";
+const DISABLED_ENV_VALUES = new Set(["0", "false", "no", "off"]);
 const STABLE_FINAL_RECOMMENDATION_PATTERNS = [
   /^\s*(?:launch|release|ship)-?ready\s*:\s*(?:yes|no)\b[^\n\r]*/im,
   /^\s*ready to release\s*:\s*(?:yes|no)\b[^\n\r]*/im,
@@ -95,6 +97,12 @@ function safePositiveInteger(value: unknown): number | null {
     if (Number.isInteger(parsed) && parsed > 0) return parsed;
   }
   return null;
+}
+
+function areOmxNativeHooksEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  const raw = env[OMX_NATIVE_HOOKS_ENV];
+  if (typeof raw !== "string") return true;
+  return !DISABLED_ENV_VALUES.has(raw.trim().toLowerCase());
 }
 
 function readHookEventName(payload: CodexHookPayload): CodexHookEventName | null {
@@ -1313,11 +1321,18 @@ export async function dispatchCodexNativeHook(
   options: NativeHookDispatchOptions = {},
 ): Promise<NativeHookDispatchResult> {
   const hookEventName = readHookEventName(payload);
+  const omxEventName = mapCodexHookEventToOmxEvent(hookEventName);
+  if (!areOmxNativeHooksEnabled()) {
+    return {
+      hookEventName,
+      omxEventName,
+      skillState: null,
+      outputJson: null,
+    };
+  }
   const cwd = options.cwd ?? (safeString(payload.cwd).trim() || process.cwd());
   const stateDir = join(cwd, ".omx", "state");
   await mkdir(stateDir, { recursive: true });
-
-  const omxEventName = mapCodexHookEventToOmxEvent(hookEventName);
   let skillState: SkillActiveState | null = null;
 
   const nativeSessionId = safeString(payload.session_id ?? payload.sessionId).trim();
@@ -1435,6 +1450,9 @@ async function readStdinJson(): Promise<NativeHookCliReadResult> {
 
 export async function runCodexNativeHookCli(): Promise<void> {
   const { payload, parseError } = await readStdinJson();
+  if (!areOmxNativeHooksEnabled()) {
+    return;
+  }
   if (parseError) {
     process.stdout.write(`${JSON.stringify({
       decision: "block",
