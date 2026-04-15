@@ -270,12 +270,32 @@ fn resolve_codex_binary() -> String {
 }
 
 fn codex_launch_for_binary(codex_binary: &str) -> Option<CodexLaunch> {
-    let interpreter = read_shebang_interpreter(Path::new(codex_binary))?;
+    let codex_path = Path::new(codex_binary);
+    if let Some(launch) = codex_launch_for_posix_node_shim(codex_path) {
+        return Some(launch);
+    }
+
+    let interpreter = read_shebang_interpreter(codex_path)?;
     let (program, mut leading_args) = resolve_shebang_launch(&interpreter)?;
     leading_args.push(codex_binary.to_string());
     Some(CodexLaunch {
         program,
         leading_args,
+    })
+}
+
+fn codex_launch_for_posix_node_shim(codex_path: &Path) -> Option<CodexLaunch> {
+    let shebang = read_shebang_interpreter(codex_path)?;
+    if !is_posix_shell_shebang(&shebang) {
+        return None;
+    }
+
+    let script = read_to_string(codex_path).ok()?;
+    let entrypoint = resolve_posix_node_shim_entrypoint(codex_path, &script)?;
+    let program = resolve_posix_node_shim_program(codex_path, &script)?;
+    Some(CodexLaunch {
+        program: program.display().to_string(),
+        leading_args: vec![entrypoint.display().to_string()],
     })
 }
 
@@ -291,6 +311,85 @@ fn read_shebang_interpreter(path: &Path) -> Option<String> {
         .map(str::trim)
         .filter(|line| !line.is_empty())
         .map(ToOwned::to_owned)
+}
+
+fn is_posix_shell_shebang(shebang: &str) -> bool {
+    let parts: Vec<&str> = shebang.split_whitespace().collect();
+    let interpreter = *parts.first().unwrap_or(&"");
+    if interpreter.ends_with("/env") {
+        return parts
+            .get(1)
+            .is_some_and(|target| is_posix_shell_name(target));
+    }
+    is_posix_shell_name(interpreter)
+}
+
+fn is_posix_shell_name(value: &str) -> bool {
+    matches!(
+        Path::new(value).file_name().and_then(|name| name.to_str()),
+        Some("sh" | "bash" | "dash" | "ash" | "ksh" | "zsh")
+    )
+}
+
+fn resolve_posix_node_shim_entrypoint(codex_path: &Path, script: &str) -> Option<PathBuf> {
+    let basedir = codex_path.parent()?;
+    quoted_shell_segments(script)
+        .into_iter()
+        .filter_map(|segment| strip_basedir_prefix(&segment).map(ToOwned::to_owned))
+        .map(|relative| normalize_path(basedir.join(relative)))
+        .find(|candidate| is_node_entrypoint(candidate))
+}
+
+fn resolve_posix_node_shim_program(codex_path: &Path, script: &str) -> Option<PathBuf> {
+    let basedir = codex_path.parent()?;
+    if quoted_shell_segments(script)
+        .into_iter()
+        .any(|segment| matches!(strip_basedir_prefix(&segment), Some("node")))
+    {
+        let sibling_node = basedir.join("node");
+        if is_usable_host_command(&sibling_node) {
+            return Some(sibling_node);
+        }
+    }
+    resolve_host_command("node")
+}
+
+fn quoted_shell_segments(script: &str) -> Vec<String> {
+    let mut segments = Vec::new();
+    let mut active_quote: Option<char> = None;
+    let mut current = String::new();
+
+    for ch in script.chars() {
+        if let Some(quote) = active_quote {
+            if ch == quote {
+                segments.push(std::mem::take(&mut current));
+                active_quote = None;
+            } else {
+                current.push(ch);
+            }
+            continue;
+        }
+
+        if ch == '\'' || ch == '"' {
+            active_quote = Some(ch);
+        }
+    }
+
+    segments
+}
+
+fn strip_basedir_prefix(segment: &str) -> Option<&str> {
+    segment
+        .strip_prefix("$basedir/")
+        .or_else(|| segment.strip_prefix("${basedir}/"))
+}
+
+fn is_node_entrypoint(path: &Path) -> bool {
+    path.is_file()
+        && matches!(
+            path.extension().and_then(|value| value.to_str()),
+            Some("js" | "cjs" | "mjs")
+        )
 }
 
 fn resolve_shebang_launch(shebang: &str) -> Option<(String, Vec<String>)> {
@@ -914,6 +1013,59 @@ mod tests {
         let expected_node = resolve_host_command("node").expect("host node path");
         assert_eq!(launch.program, expected_node.display().to_string());
         assert_eq!(launch.leading_args, vec![script_path.display().to_string()]);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn codex_launch_for_posix_package_manager_shim_uses_host_node_and_entrypoint() {
+        let _guard = env_lock();
+        let root = temp_allowlist_dir().expect("temp root");
+        let host_bin = root.path.join("host-bin");
+        let shim_dir = root.path.join("node_modules").join(".bin");
+        let entrypoint = root
+            .path
+            .join("node_modules")
+            .join("@openai")
+            .join("codex")
+            .join("bin")
+            .join("codex.js");
+        create_dir_all(&host_bin).expect("create host bin");
+        create_dir_all(&shim_dir).expect("create shim dir");
+        create_dir_all(entrypoint.parent().expect("entrypoint parent"))
+            .expect("create entrypoint dir");
+
+        let fake_node = host_bin.join("node");
+        write_executable(&fake_node, "#!/bin/sh\nexit 0\n").expect("write fake node");
+        write(&entrypoint, "console.log('ok');\n").expect("write entrypoint");
+
+        let shim_path = shim_dir.join("codex");
+        write_executable(
+            &shim_path,
+            r#"#!/bin/sh
+basedir=$(dirname "$0")
+if [ -x "$basedir/node" ]; then
+  exec "$basedir/node" "$basedir/../@openai/codex/bin/codex.js" "$@"
+fi
+exec node "$basedir/../@openai/codex/bin/codex.js" "$@"
+"#,
+        )
+        .expect("write shim");
+
+        let original_path = env::var_os("PATH");
+        unsafe {
+            env::set_var("PATH", &host_bin);
+        }
+
+        let launch =
+            codex_launch_for_binary(shim_path.to_str().expect("shim path")).expect("launch config");
+
+        match original_path {
+            Some(value) => unsafe { env::set_var("PATH", value) },
+            None => unsafe { env::remove_var("PATH") },
+        }
+
+        assert_eq!(launch.program, fake_node.display().to_string());
+        assert_eq!(launch.leading_args, vec![entrypoint.display().to_string()]);
     }
 
     #[cfg(unix)]
