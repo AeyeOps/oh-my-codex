@@ -1,6 +1,6 @@
 import { afterEach, describe, it, mock } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync, utimesSync } from "node:fs";
 import { chmod, mkdir, mkdtemp, readFile, readdir as fsReaddir, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
@@ -1936,7 +1936,32 @@ exit 0
     ]);
   });
 
-  it("buildDetachedSessionFinalizeSteps keeps schedule after split-capture and before attach", () => {
+  it("acquireTmuxExtendedKeysLease recovers from a stale lock left by a crashed process", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-tmux-stale-lock-"));
+    const leaseDir = join(cwd, ".omx", "state", "tmux-extended-keys");
+    const lockDir = join(leaseDir, "tmp-stale-sock.lock");
+
+    mkdirSync(lockDir, { recursive: true });
+    const staleTime = new Date(Date.now() - 60_000);
+    utimesSync(lockDir, staleTime, staleTime);
+
+    const calls: string[][] = [];
+    const execStub = (_file: string, args: readonly string[]): string => {
+      calls.push([...args]);
+      if (args[0] === "display-message") return "/tmp/stale-sock";
+      return "";
+    };
+
+    const lease = acquireTmuxExtendedKeysLease(cwd, execStub);
+
+    assert.equal(typeof lease, "string", "lease should succeed after stale lock recovery");
+    assert.ok(!existsSync(lockDir), "stale lock directory should be removed");
+
+    if (lease) releaseTmuxExtendedKeysLease(cwd, lease, execStub);
+    await rm(cwd, { recursive: true, force: true });
+  });
+
+    it("buildDetachedSessionFinalizeSteps keeps schedule after split-capture and before attach", () => {
     const steps = buildDetachedSessionFinalizeSteps(
       "omx-demo",
       "%12",
