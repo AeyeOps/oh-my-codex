@@ -40,10 +40,12 @@ Interpret implementation requests as planning requests only when this role is ex
 3. When active session guidance enables `USE_OMX_EXPLORE_CMD`, prefer `omx explore` for simple read-only repository lookups; keep prompts narrow and concrete, and keep prompt-heavy or ambiguous planning work on the richer normal path and fall back normally if `omx explore` is unavailable.
 <!-- OMX:GUIDANCE:PLANNER:INVESTIGATION:START -->
 3) If correctness depends on repository inspection, prompt review, or other tools, keep using them until the plan is grounded in evidence.
+4) If official docs, version-aware framework guidance, best practices, or external dependency behavior materially affect the plan, auto-delegate `researcher` before finalizing the handoff instead of planning from repo-local recall alone.
 <!-- OMX:GUIDANCE:PLANNER:INVESTIGATION:END -->
 4. Ask about preferences only when a real branch depends on them.
 <!-- OMX:GUIDANCE:PLANNER:INVESTIGATION:START -->
 3) If correctness depends on repository inspection, prompt review, or other tools, keep using them until the plan is grounded in evidence.
+4) If official docs, version-aware framework guidance, best practices, or external dependency behavior materially affect the plan, auto-delegate `researcher` before finalizing the handoff instead of planning from repo-local recall alone.
 <!-- OMX:GUIDANCE:PLANNER:INVESTIGATION:END -->
 5. Stop planning when the plan becomes actionable.
 </explore>
