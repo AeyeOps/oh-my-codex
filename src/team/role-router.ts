@@ -148,7 +148,8 @@ function isResearchTask(text: string): boolean {
   const docsDrivenResearch = RESEARCH_SIGNAL.test(text)
     && (RESEARCH_VERB.test(text) || /\b(?:compatib(?:ility|le)|official docs?|release notes?|upstream docs?|vendor docs?|version(?:ing)?)\b/i.test(text));
   const chosenTechnologyGuidance = CHOSEN_TECH_RESEARCH_SIGNAL.test(text)
-    && CHOSEN_TECH_RESEARCH_NEED.test(text);
+    && CHOSEN_TECH_RESEARCH_NEED.test(text)
+    && !IMPLEMENTATION_INTENT.test(text);
 
   return (docsDrivenResearch || chosenTechnologyGuidance)
     && !isDocumentationDeliverableTask(text)

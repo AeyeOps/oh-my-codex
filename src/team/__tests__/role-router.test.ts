@@ -183,6 +183,18 @@ describe('role-router', () => {
       assert.equal(result.confidence, 'high');
     });
 
+    it('keeps implementation phrasing on the fallback lane even when framework feature keywords appear', () => {
+      const result = routeTaskToRole(
+        'Implement framework feature',
+        'Implement the framework feature in our local handler',
+        'team-exec',
+        'executor',
+      );
+      assert.equal(result.role, 'executor');
+      assert.equal(result.confidence, 'low');
+      assert.match(result.reason, /fallback|using fallback/i);
+    });
+
     it('routes documentation tasks to writer', () => {
       const result = routeTaskToRole('Update docs', 'Write README and migration guide for the new API', 'team-exec', 'executor');
       assert.equal(result.role, 'writer');
