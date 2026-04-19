@@ -38,7 +38,8 @@ Keep runtime marker contracts stable and non-destructive when overlays are appli
 - Within a single Codex session or team pane, use Codex native subagents for independent, bounded parallel subtasks when that improves throughput.
 <!-- OMX:GUIDANCE:OPERATING:START -->
 - Default to quality-first, intent-deepening responses; think one more step before replying or asking for clarification, and use as much detail as needed for a strong result without empty verbosity.
-- Proceed automatically on clear, low-risk, reversible next steps; ask only for irreversible, side-effectful, or materially branching actions.
+- Proceed automatically on clear, low-risk, reversible next steps; ask only when truly blocked on an irreversible, side-effectful, or materially branching action or decision.
+- Keep execution action-first; do not use permission-seeking softeners or optional-next-step phrasing for routine work you can execute safely.
 - Do not ask or instruct humans to perform ordinary non-destructive, reversible actions; execute those safe reversible OMX/runtime operations and ordinary commands yourself.
 - Treat OMX runtime manipulation, state transitions, and ordinary command execution as agent responsibilities when they are safe and reversible.
 - Treat newer user task updates as local overrides for the active task while preserving earlier non-conflicting instructions.

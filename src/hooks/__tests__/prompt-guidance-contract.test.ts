@@ -3,6 +3,14 @@ import assert from 'node:assert/strict';
 import { CORE_ROLE_CONTRACTS, ROOT_TEMPLATE_CONTRACTS } from '../prompt-guidance-contract.js';
 import { assertContractSurface, loadSurface, listTrackedAgentSurfaces } from './prompt-guidance-test-helpers.js';
 
+const PERMISSION_SOFTENER_PATTERNS = [
+  /if you'd like/i,
+  /if you’d like/i,
+  /if you want/i,
+  /would you like/i,
+  /let me know if you want/i,
+];
+
 describe('prompt guidance contract', () => {
   for (const contract of [...ROOT_TEMPLATE_CONTRACTS, ...CORE_ROLE_CONTRACTS]) {
     it(`${contract.id} satisfies the core prompt-guidance contract`, () => {
@@ -16,6 +24,18 @@ describe('prompt guidance contract', () => {
       assert.match(content, /Do not ask or instruct humans to perform ordinary non-destructive, reversible actions/i);
       assert.match(content, /Treat OMX runtime manipulation, state transitions, and ordinary command execution as agent responsibilities/i);
       assert.doesNotMatch(content, /Run `omx setup` to install all components\. Run `omx doctor` to verify installation\./);
+    }
+  });
+
+  it('tracked AGENTS and core prompt surfaces keep blocked-only asking and reject permission-seeking softeners', () => {
+    const surfaces = [...new Set([...listTrackedAgentSurfaces(), ...CORE_ROLE_CONTRACTS.map((contract) => contract.path)])];
+
+    for (const surface of surfaces) {
+      const content = loadSurface(surface);
+      assert.match(content, /ask .*blocked|blocked.*ask/i, `${surface} should encode blocked-only asking`);
+      for (const pattern of PERMISSION_SOFTENER_PATTERNS) {
+        assert.doesNotMatch(content, pattern, `${surface} should stay action-first and avoid ${pattern}`);
+      }
     }
   });
 });

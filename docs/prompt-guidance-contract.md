@@ -86,6 +86,7 @@ Example prompt text:
 ### 2. Automatic follow-through on clear, low-risk, reversible next steps
 
 Contributors should preserve the bias toward continuing useful work automatically instead of asking avoidable confirmation questions.
+Blocked-only asking should be explicit: these surfaces should ask only when a real blocker remains, and they should avoid permission-seeking softeners such as `if you'd like`, `if you want`, `would you like`, and `let me know if you want` when the next safe step is already executable.
 
 Representative locations:
 

@@ -11,6 +11,8 @@ function rx(pattern: string): RegExp {
 const ROOT_TEMPLATE_PATTERNS = [
   rx('quality-first.*intent-deepening responses'),
   rx('clear, low-risk, reversible next steps'),
+  rx('ask only when truly blocked'),
+  rx('permission-seeking softeners'),
   rx('do not ask or instruct humans.*ordinary non-destructive.*reversible actions'),
   rx('OMX runtime manipulation.*agent responsibilities'),
   rx('local overrides?.*non-conflicting instructions'),
@@ -38,18 +40,24 @@ const ROOT_TEMPLATE_PATTERNS = [
 const CORE_ROLE_PATTERNS = {
   executor: [
     rx('quality-first.*intent-deepening outputs'),
+    rx('ask only when the next step is blocked'),
+    rx('permission-seeking softeners'),
     rx('reflexive web/tool escalation'),
     rx('local overrides?.*non-conflicting constraints'),
     rx('task is grounded and verified'),
   ],
   planner: [
     rx('quality-first.*intent-deepening plan summaries'),
+    rx('ask the user only when blocked'),
+    rx('permission-seeking softeners'),
     rx('reflexive web/tool escalation'),
     rx('local overrides?.*non-conflicting constraints'),
     rx('plan is grounded in evidence'),
   ],
   verifier: [
     rx('quality-first, evidence-dense summaries'),
+    rx('Ask only when the acceptance target is materially unclear.*blocked'),
+    rx('permission-seeking softeners'),
     rx('proof that matters|tool churn'),
     rx('verdict is grounded'),
     rx('non-conflicting acceptance criteria'),
