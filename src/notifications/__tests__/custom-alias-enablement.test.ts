@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-const ENV_KEYS = ['CODEX_HOME', 'OMX_OPENCLAW'] as const;
+const ENV_KEYS = ['CODEX_HOME', 'OMX_OPENCLAW', 'OMX_OPENCLAW_CONFIG'] as const;
 
 let tempCodexHome: string;
 let getNotificationConfig: typeof import('../config.js').getNotificationConfig;

@@ -4,7 +4,7 @@ import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-const ENV_KEYS = ['CODEX_HOME', 'TMUX', 'TMUX_PANE', 'PATH'] as const;
+const ENV_KEYS = ['CODEX_HOME', 'TMUX', 'TMUX_PANE', 'PATH', 'OMX_OPENCLAW', 'OMX_OPENCLAW_CONFIG'] as const;
 
 const originalFetch = globalThis.fetch;
 
@@ -55,6 +55,8 @@ describe('notifyLifecycle tmux tail auto-capture', () => {
     process.env.PATH = `${fakeBinDir}:${originalEnv.PATH || ''}`;
     process.env.TMUX = '/tmp/tmux-1000/default,12345,0';
     process.env.TMUX_PANE = '%42';
+    delete process.env.OMX_OPENCLAW;
+    delete process.env.OMX_OPENCLAW_CONFIG;
   });
 
   afterEach(() => {

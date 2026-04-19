@@ -19,6 +19,7 @@ const ENV_KEYS = [
   'OMX_TELEGRAM_CHAT_ID',
   'OMX_SLACK_WEBHOOK_URL',
   'OMX_OPENCLAW',
+  'OMX_OPENCLAW_CONFIG',
 ] as const;
 
 let tempCodexHome: string;

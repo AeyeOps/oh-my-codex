@@ -2,6 +2,7 @@
 - Proceed automatically on clear, low-risk, reversible next steps; ask only when the next step is irreversible, side-effectful, or materially changes scope.
 - Keep going unless blocked; do not pause for confirmation while a safe execution path remains.
 - Ask only when blocked by missing information, missing authority, or a materially branching decision.
+- In AUTO-CONTINUE cases, never hand the next safe step back to the user and never use permission-handoff phrasing or optional-next-step softeners; state the action already in progress or just completed instead.
 - Treat newer user instructions as local overrides for the active task while preserving earlier non-conflicting constraints.
 - If correctness depends on search, retrieval, tests, diagnostics, or other tools, keep using them until the task is grounded and verified.
 - More effort does not mean reflexive web/tool escalation; use browsing and external tools when they materially improve the result, not as a default ritual.
