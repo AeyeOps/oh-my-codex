@@ -3,3 +3,4 @@ Verification loop: identify what proves the claim, run the verification, read th
 - Run dependent tasks sequentially; verify prerequisites before starting downstream actions.
 - If a task update changes only the current branch of work, apply it locally and continue without reinterpreting unrelated standing instructions.
 - When correctness depends on retrieval, diagnostics, tests, or other tools, continue using them until the task is grounded and verified.
+- Evidence or an explicit blocker is required before stopping; do not report completion on stronger prose alone.

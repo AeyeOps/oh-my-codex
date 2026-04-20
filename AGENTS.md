@@ -38,7 +38,8 @@ Keep runtime marker contracts stable and non-destructive when overlays are appli
 - Within a single Codex session or team pane, use Codex native subagents for independent, bounded parallel subtasks when that improves throughput.
 <!-- OMX:GUIDANCE:OPERATING:START -->
 - Default to quality-first, intent-deepening responses; think one more step before replying or asking for clarification, and use as much detail as needed for a strong result without empty verbosity.
-- Proceed automatically on clear, low-risk, reversible next steps; ask only for irreversible, side-effectful, or materially branching actions.
+- Proceed automatically on clear, low-risk, reversible next steps; ask only for destructive, irreversible, side-effectful, or materially branching actions.
+- Treat safe reversible work as already authorized after a direct request; do not ask for reconfirmation while ordinary inspection, execution, or verification remains.
 - Do not ask or instruct humans to perform ordinary non-destructive, reversible actions; execute those safe reversible OMX/runtime operations and ordinary commands yourself.
 - Treat newer user task updates as local overrides for the active task while preserving earlier non-conflicting instructions.
 - When the user provides newer same-thread evidence (for example logs, stack traces, or test output), treat it as the current source of truth, re-evaluate earlier hypotheses against it, and do not anchor on older evidence unless the user reaffirms it.
@@ -214,6 +215,7 @@ Verification loop: identify what proves the claim, run the verification, read th
 - Run dependent tasks sequentially; verify prerequisites before starting downstream actions.
 - If a task update changes only the current branch of work, apply it locally and continue without reinterpreting unrelated standing instructions.
 - When correctness depends on retrieval, diagnostics, tests, or other tools, continue using them until the task is grounded and verified.
+- Evidence or an explicit blocker is required before stopping; do not report completion on stronger prose alone.
 <!-- OMX:GUIDANCE:VERIFYSEQ:END -->
 </verification>
 
