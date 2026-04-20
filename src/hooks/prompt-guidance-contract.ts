@@ -50,7 +50,7 @@ const WAVE_TWO_PATTERNS = [
   rx('safe reversible work as already authorized'),
   rx('Evidence or an explicit blocker is required before stopping'),
   rx('user says `continue`'),
-  rx('keep using those tools until .* grounded|Continue through clear, low-risk'),
+  rx('keep (?:using|researching|reading|validating).* until .* grounded|Continue through clear, low-risk|Keep validating'),
 ];
 
 const CATALOG_PATTERNS = [
@@ -59,7 +59,7 @@ const CATALOG_PATTERNS = [
   rx('safe reversible work as already authorized'),
   rx('Evidence or an explicit blocker is required before stopping'),
   rx('user says `continue`'),
-  rx('keep using those tools until .* grounded|Continue through clear, low-risk'),
+  rx('keep (?:using|researching|reading|validating).* until .* grounded|Continue through clear, low-risk|Keep validating'),
 ];
 
 const SKILL_PATTERNS = [
@@ -69,7 +69,7 @@ const SKILL_PATTERNS = [
   rx('Evidence or an explicit blocker is required before stopping'),
   rx('user says `continue`'),
   rx('Continue through clear, low-risk, reversible next steps automatically'),
-  rx('keep using the relevant tools until the workflow is grounded|keep using the relevant tools until the execution loop is grounded|keep using the relevant tools until the team workflow is grounded|keep using the relevant tools until the QA cycle is grounded|keep using the relevant tools until the plan is grounded|keep using the relevant tools until the consensus-planning flow is grounded'),
+  rx('keep using the relevant tools until (?:the )?(?:workflow|execution loop|team workflow|QA cycle|plan|consensus-planning flow|analysis|build-fix workflow|review|security review) is grounded'),
 ];
 
 export const ROOT_TEMPLATE_CONTRACTS: GuidanceSurfaceContract[] = [
