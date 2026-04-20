@@ -9,40 +9,43 @@ function rx(pattern: string): RegExp {
 }
 
 const ROOT_TEMPLATE_PATTERNS = [
-  rx('quality-first|intent-deepening'),
+  rx('quality-first, intent-deepening responses'),
   rx('clear, low-risk, reversible next steps'),
-  rx('ordinary safe reversible work|safe reversible work should proceed without reconfirmation|safe reversible work is already authorized'),
+  rx('ordinary non-destructive, reversible actions'),
+  rx('destructive, irreversible, side-effectful, or materially branching'),
   rx('local overrides?.*non-conflicting instructions'),
   rx('Outside active `team`/`swarm` mode, use `executor`'),
   rx('Reserve `worker` strictly for active `team`/`swarm` sessions'),
   rx('do not skip prerequisites|task is grounded and verified'),
-  rx('concise evidence summaries|verification evidence collected|explicit blocker'),
+  rx('quality-first evidence summaries'),
+  rx('safe reversible work as already authorized'),
+  rx('Evidence or an explicit blocker is required before stopping'),
 ];
 
 const CORE_ROLE_PATTERNS = {
   executor: [
-    rx('quality-first|intent-deepening'),
-    rx('clear, low-risk, reversible next steps'),
+    rx('quality-first, intent-deepening outputs'),
     rx('local overrides?.*non-conflicting constraints'),
     rx('task is grounded and verified'),
-    rx('No evidence = not complete|evidence-backed completion details|explicit blocker'),
+    rx('safe reversible work as already authorized'),
+    rx('Evidence or an explicit blocker is required before stopping'),
   ],
   planner: [
-    rx('quality-first|intent-deepening|information-dense plan summaries'),
+    rx('quality-first, intent-deepening plan summaries'),
     rx('local overrides?.*non-conflicting constraints'),
     rx('plan is grounded in evidence'),
-    rx('clear, low-risk planning steps|materially branching decisions'),
+    rx('safe reversible work as already authorized'),
   ],
   verifier: [
     rx('quality-first, evidence-dense summaries'),
     rx('verdict is grounded'),
     rx('non-conflicting acceptance criteria'),
-    rx('keep gathering the required evidence|additional tests, diagnostics, or inspection'),
+    rx('Evidence or an explicit blocker is required before stopping|missing evidence as INCOMPLETE'),
   ],
 };
 
 const WAVE_TWO_PATTERNS = [
-  rx('Default final-output shape: .*evidence-dense'),
+  rx('Default final-output shape: quality-first and evidence-dense'),
   rx('Treat newer user task updates as local overrides'),
   rx('safe reversible work as already authorized'),
   rx('Evidence or an explicit blocker is required before stopping'),
@@ -51,7 +54,7 @@ const WAVE_TWO_PATTERNS = [
 ];
 
 const CATALOG_PATTERNS = [
-  rx('Default final-output shape: .*evidence-dense'),
+  rx('Default final-output shape: quality-first and evidence-dense'),
   rx('Treat newer user task updates as local overrides'),
   rx('safe reversible work as already authorized'),
   rx('Evidence or an explicit blocker is required before stopping'),
