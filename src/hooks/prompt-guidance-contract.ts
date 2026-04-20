@@ -9,48 +9,62 @@ function rx(pattern: string): RegExp {
 }
 
 const ROOT_TEMPLATE_PATTERNS = [
-  rx('compact, information-dense responses'),
+  rx('quality-first, intent-deepening responses'),
   rx('clear, low-risk, reversible next steps'),
+  rx('ordinary non-destructive, reversible actions'),
+  rx('destructive, irreversible, side-effectful, or materially branching'),
   rx('local overrides?.*non-conflicting instructions'),
   rx('Outside active `team`/`swarm` mode, use `executor`'),
   rx('Reserve `worker` strictly for active `team`/`swarm` sessions'),
   rx('do not skip prerequisites|task is grounded and verified'),
-  rx('concise evidence summaries'),
+  rx('quality-first evidence summaries'),
+  rx('safe reversible work as already authorized'),
+  rx('Evidence or an explicit blocker is required before stopping'),
 ];
 
 const CORE_ROLE_PATTERNS = {
   executor: [
-    rx('compact, information-dense outputs'),
+    rx('quality-first, intent-deepening outputs'),
     rx('local overrides?.*non-conflicting constraints'),
     rx('task is grounded and verified'),
+    rx('safe reversible work as already authorized'),
+    rx('Evidence or an explicit blocker is required before stopping'),
   ],
   planner: [
-    rx('compact, information-dense plan summaries'),
+    rx('quality-first, intent-deepening plan summaries'),
     rx('local overrides?.*non-conflicting constraints'),
     rx('plan is grounded in evidence'),
+    rx('safe reversible work as already authorized'),
   ],
   verifier: [
-    rx('concise, evidence-dense summaries'),
+    rx('quality-first, evidence-dense summaries'),
     rx('verdict is grounded'),
     rx('non-conflicting acceptance criteria'),
+    rx('Evidence or an explicit blocker is required before stopping|missing evidence as INCOMPLETE'),
   ],
 };
 
 const WAVE_TWO_PATTERNS = [
-  rx('Default final-output shape: concise and evidence-dense'),
+  rx('Default final-output shape: quality-first and evidence-dense'),
   rx('Treat newer user task updates as local overrides'),
+  rx('safe reversible work as already authorized'),
+  rx('Evidence or an explicit blocker is required before stopping'),
   rx('user says `continue`'),
 ];
 
 const CATALOG_PATTERNS = [
-  rx('Default final-output shape: concise and evidence-dense'),
+  rx('Default final-output shape: quality-first and evidence-dense'),
   rx('Treat newer user task updates as local overrides'),
+  rx('safe reversible work as already authorized'),
+  rx('Evidence or an explicit blocker is required before stopping'),
   rx('user says `continue`'),
 ];
 
 const SKILL_PATTERNS = [
-  rx('concise, evidence-dense progress and completion reporting'),
+  rx('quality-first, evidence-dense progress and completion reporting'),
   rx('local overrides for the active workflow branch'),
+  rx('safe reversible work as already authorized'),
+  rx('Evidence or an explicit blocker is required before stopping'),
   rx('user says `continue`'),
 ];
 
@@ -144,6 +158,8 @@ export const LEGACY_PROMPT_CONTRACTS: GuidanceSurfaceContract[] = [
     requiredPatterns: [
       rx('local overrides for the active simplification scope'),
       rx('simplification result is grounded'),
+      rx('safe reversible work as already authorized'),
+      rx('Evidence or an explicit blocker is required before stopping'),
       rx('<Scenario_Examples>'),
     ],
   },
@@ -154,9 +170,10 @@ export const SPECIALIZED_PROMPT_CONTRACTS: GuidanceSurfaceContract[] = [
     id: 'sisyphus-lite',
     path: 'prompts/sisyphus-lite.md',
     requiredPatterns: [
-      rx('compact, information-dense outputs'),
+      rx('quality-first, intent-deepening outputs'),
       rx('Treat newer user instructions as local overrides'),
       rx('No evidence = not complete'),
+      rx('Evidence or an explicit blocker is required before stopping'),
       rx('specialized worker behavior prompt|worker behavior prompt'),
     ],
   },

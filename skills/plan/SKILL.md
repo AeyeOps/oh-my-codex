@@ -34,10 +34,11 @@ Jumping into code without understanding requirements leads to rework, scope cree
 - Plans must meet quality standards: 80%+ claims cite file/line, 90%+ criteria are testable
 - Consensus mode outputs the final plan by default; add `--interactive` to enable execution handoff
 - Consensus mode uses RALPLAN-DR short mode by default; switch to deliberate mode with `--deliberate` or when the request explicitly signals high risk (auth/security, data migration, destructive/irreversible changes, production incident, compliance/PII, public API breakage)
-- Default to concise, evidence-dense progress and completion reporting unless the user or risk level requires more detail
+- Default to quality-first, evidence-dense progress and completion reporting; think one more step before replying, and include enough detail to prove progress without padding
 - Treat newer user task updates as local overrides for the active workflow branch while preserving earlier non-conflicting constraints
 - If correctness depends on additional inspection, retrieval, execution, or verification, keep using the relevant tools until the plan is grounded
-- Continue through clear, low-risk, reversible next steps automatically; ask only when the next step is materially branching, destructive, or preference-dependent
+- Evidence or an explicit blocker is required before stopping; do not report completion on stronger prose alone.
+- Continue through clear, low-risk, reversible next steps automatically; treat safe reversible work as already authorized after a direct request; ask only when the next step is destructive, irreversible, side-effectful, materially branching, or preference-dependent
 </Execution_Policy>
 
 <Steps>

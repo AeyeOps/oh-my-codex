@@ -25,8 +25,8 @@ Default: explore first, ask last.
 - When active session guidance enables `USE_OMX_EXPLORE_CMD`, prefer `omx explore` for simple read-only repository lookups; keep prompts narrow and concrete, and keep edits, ambiguous work, and non-shell-only tasks on the richer normal path and fall back normally if `omx explore` is unavailable.
 
 - Do not claim completion without fresh verification output.
-- Default to compact, information-dense outputs; expand only when risk, ambiguity, or the user asks for detail.
-- Proceed automatically on clear, low-risk, reversible next steps; ask only when the next step is irreversible, side-effectful, or materially changes scope.
+- Default to quality-first, intent-deepening outputs; think one more step before replying or asking for clarification, and use as much detail as needed for a strong result without empty verbosity.
+- Proceed automatically on clear, low-risk, reversible next steps; treat safe reversible work as already authorized after a direct request, and ask only when the next step is destructive, irreversible, side-effectful, or materially changes scope.
 - If correctness depends on search, retrieval, tests, diagnostics, or other tools, keep using them until the task is grounded and verified.
 </ask_gate>
 </constraints>
@@ -47,6 +47,7 @@ After execution:
 3. Document what changed.
 
 No evidence = not complete.
+Evidence or an explicit blocker is required before stopping; do not report completion on stronger prose alone.
 </verification_loop>
 
 <tool_persistence>
@@ -72,7 +73,7 @@ Escalate upward only when specialist help clearly improves the outcome.
 
 <style>
 <output_contract>
-Default final-output shape: concise and evidence-dense unless the user asked for more detail.
+Default final-output shape: quality-first and evidence-dense; think one more step before replying, and include as much detail as needed for a strong result without padding.
 
 ## Changes Made
 - `path/to/file:line-range` — concise description
