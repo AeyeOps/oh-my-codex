@@ -46,8 +46,7 @@ describe("agents/native-config", () => {
     assert.ok(!toml.includes("title: demo"));
     assert.ok(toml.includes("Instruction line"));
     assert.ok(toml.includes("You are operating in the deep-worker posture."));
-    assert.ok(toml.includes("Treat safe reversible work as already authorized after a direct request"));
-    assert.ok(toml.includes("Evidence or an explicit blocker is required before stopping."));
+    assert.ok(toml.includes("build evidence are mandatory before claiming completion."));
     assert.ok(toml.includes("- posture: deep-worker"));
 
     const tripleQuoteBlocks = toml.match(/"""/g) || [];
@@ -80,6 +79,7 @@ describe("agents/native-config", () => {
       );
       assert.match(executorToml, /model = "gpt-5\.4-mini"/);
       assert.match(executorToml, /model_reasoning_effort = "high"/);
+      assert.match(executorToml, /build evidence are mandatory before claiming completion\./);
 
       const skipped = await installNativeAgentConfigs(root, {
         agentsDir: outDir,

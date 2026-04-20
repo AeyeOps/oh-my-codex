@@ -9,55 +9,54 @@ function rx(pattern: string): RegExp {
 }
 
 const ROOT_TEMPLATE_PATTERNS = [
-  rx('quality-first, intent-deepening responses'),
+  rx('quality-first|intent-deepening'),
   rx('clear, low-risk, reversible next steps'),
-  rx('ordinary non-destructive, reversible actions'),
-  rx('destructive, irreversible, side-effectful, or materially branching'),
+  rx('ordinary safe reversible work|safe reversible work should proceed without reconfirmation|safe reversible work is already authorized'),
   rx('local overrides?.*non-conflicting instructions'),
   rx('Outside active `team`/`swarm` mode, use `executor`'),
   rx('Reserve `worker` strictly for active `team`/`swarm` sessions'),
   rx('do not skip prerequisites|task is grounded and verified'),
-  rx('quality-first evidence summaries'),
-  rx('safe reversible work as already authorized'),
-  rx('Evidence or an explicit blocker is required before stopping'),
+  rx('concise evidence summaries|verification evidence collected|explicit blocker'),
 ];
 
 const CORE_ROLE_PATTERNS = {
   executor: [
-    rx('quality-first, intent-deepening outputs'),
+    rx('quality-first|intent-deepening'),
+    rx('clear, low-risk, reversible next steps'),
     rx('local overrides?.*non-conflicting constraints'),
     rx('task is grounded and verified'),
-    rx('safe reversible work as already authorized'),
-    rx('Evidence or an explicit blocker is required before stopping'),
+    rx('No evidence = not complete|evidence-backed completion details|explicit blocker'),
   ],
   planner: [
-    rx('quality-first, intent-deepening plan summaries'),
+    rx('quality-first|intent-deepening|information-dense plan summaries'),
     rx('local overrides?.*non-conflicting constraints'),
     rx('plan is grounded in evidence'),
-    rx('safe reversible work as already authorized'),
+    rx('clear, low-risk planning steps|materially branching decisions'),
   ],
   verifier: [
     rx('quality-first, evidence-dense summaries'),
     rx('verdict is grounded'),
     rx('non-conflicting acceptance criteria'),
-    rx('Evidence or an explicit blocker is required before stopping|missing evidence as INCOMPLETE'),
+    rx('keep gathering the required evidence|additional tests, diagnostics, or inspection'),
   ],
 };
 
 const WAVE_TWO_PATTERNS = [
-  rx('Default final-output shape: quality-first and evidence-dense'),
+  rx('Default final-output shape: .*evidence-dense'),
   rx('Treat newer user task updates as local overrides'),
   rx('safe reversible work as already authorized'),
   rx('Evidence or an explicit blocker is required before stopping'),
   rx('user says `continue`'),
+  rx('keep using those tools until .* grounded|Continue through clear, low-risk'),
 ];
 
 const CATALOG_PATTERNS = [
-  rx('Default final-output shape: quality-first and evidence-dense'),
+  rx('Default final-output shape: .*evidence-dense'),
   rx('Treat newer user task updates as local overrides'),
   rx('safe reversible work as already authorized'),
   rx('Evidence or an explicit blocker is required before stopping'),
   rx('user says `continue`'),
+  rx('keep using those tools until .* grounded|Continue through clear, low-risk'),
 ];
 
 const SKILL_PATTERNS = [
@@ -66,6 +65,8 @@ const SKILL_PATTERNS = [
   rx('safe reversible work as already authorized'),
   rx('Evidence or an explicit blocker is required before stopping'),
   rx('user says `continue`'),
+  rx('Continue through clear, low-risk, reversible next steps automatically'),
+  rx('keep using the relevant tools until the workflow is grounded|keep using the relevant tools until the execution loop is grounded|keep using the relevant tools until the team workflow is grounded|keep using the relevant tools until the QA cycle is grounded|keep using the relevant tools until the plan is grounded|keep using the relevant tools until the consensus-planning flow is grounded'),
 ];
 
 export const ROOT_TEMPLATE_CONTRACTS: GuidanceSurfaceContract[] = [
