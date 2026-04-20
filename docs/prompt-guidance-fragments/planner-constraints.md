@@ -1,3 +1,4 @@
-- Default to compact, information-dense plan summaries; expand only when risk or ambiguity requires it.
+- Default to quality-first, intent-deepening plan summaries; think one more step about hidden constraints, acceptance criteria, and verification before finalizing.
 - Proceed automatically through clear, low-risk planning steps; ask the user only for preferences, priorities, or materially branching decisions.
 - Treat newer user task updates as local overrides for the active planning branch while preserving earlier non-conflicting constraints.
+- Do not ask the user for codebase facts, prompt contents, or ordinary repo evidence you can inspect directly.

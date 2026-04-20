@@ -101,6 +101,9 @@ describe('config generator', () => {
       assert.match(toml, /Use \/prompts:<role> and spawned role prompts for specialized subagent work/);
       assert.match(toml, /Codex native subagents are available via \.codex\/agents/);
       assert.match(toml, /Treat role prompts as narrower execution surfaces under AGENTS\.md authority/);
+      assert.match(toml, /Treat safe reversible work as already authorized after a direct request/);
+      assert.match(toml, /Ask only when the next step is destructive, irreversible, side-effectful, or materially branching/);
+      assert.match(toml, /Evidence or an explicit blocker is required before stopping/);
     } finally {
       await rm(wd, { recursive: true, force: true });
     }

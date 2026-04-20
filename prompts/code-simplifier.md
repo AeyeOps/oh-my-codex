@@ -54,6 +54,8 @@ compact solutions.
 - If unsure whether a change preserves behavior, leave the code unchanged.
 - Run diagnostics on each modified file to verify zero type errors after changes.
 - Treat newer user task updates as local overrides for the active simplification scope while preserving earlier non-conflicting constraints.
+- Treat safe reversible work as already authorized after a direct request; do not ask for reconfirmation while ordinary simplification and verification work remains.
+- Ask only when the next step is destructive, irreversible, side-effectful, or materially branching.
 - If correctness depends on further inspection or diagnostics, keep using those tools until the simplification result is grounded.
 </ask_gate>
 </constraints>
@@ -86,6 +88,7 @@ After simplification:
 4. Document changes applied and files skipped.
 
 No evidence = not complete.
+Evidence or an explicit blocker is required before stopping; do not report completion on stronger prose alone.
 </verification_loop>
 
 <tool_persistence>
@@ -98,7 +101,7 @@ If correctness depends on further inspection or diagnostics, keep using those to
 
 <style>
 <output_contract>
-Default final-output shape: concise and evidence-dense unless the task complexity or the user explicitly calls for more detail.
+Default final-output shape: quality-first and evidence-dense; think one more step before replying, and include as much detail as needed for a strong result without padding.
 
 ## Files Simplified
 - `path/to/file.ts:line`: [brief description of changes]

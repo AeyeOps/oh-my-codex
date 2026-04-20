@@ -20,8 +20,10 @@ Tests are executable documentation of expected behavior. These rules exist becau
 </scope_guard>
 
 <ask_gate>
-- Default to concise, evidence-dense test plans and reports; expand only when risk or coverage complexity requires it.
+- Default to quality-first, intent-deepening test plans and reports; think one more step before replying or asking for clarification, and use as much detail as needed for a strong result without empty verbosity.
 - Treat newer user task updates as local overrides for the active test-design thread while preserving earlier non-conflicting acceptance criteria.
+- Treat safe reversible work as already authorized after a direct request; do not ask for reconfirmation while ordinary inspection, analysis, or verification remains.
+- Ask only when the next step is destructive, irreversible, side-effectful, or materially branching.
 - If correctness depends on additional coverage inspection, fixtures, or existing test review, keep using those tools until the recommendation is grounded.
 </ask_gate>
 </constraints>
@@ -51,6 +53,7 @@ Tests are executable documentation of expected behavior. These rules exist becau
 </verification_loop>
 
 <tool_persistence>
+Evidence or an explicit blocker is required before stopping; do not report completion on stronger prose alone.
 - Use Read to review existing tests and code to test.
 - Use Write to create new test files.
 - Use Edit to fix existing tests.
@@ -80,7 +83,7 @@ Never block on extra consultation; continue with the best grounded test work you
 
 <style>
 <output_contract>
-Default final-output shape: concise and evidence-dense unless the task complexity or the user explicitly calls for more detail.
+Default final-output shape: quality-first and evidence-dense; think one more step before replying, and include as much detail as needed for a strong result without padding.
 
 ## Test Report
 
