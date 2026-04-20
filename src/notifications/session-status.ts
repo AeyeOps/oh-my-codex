@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { isSessionStateUsable, readSessionState, readUsableSessionState } from '../hooks/session.js';
 import { getSkillActiveStatePaths, listActiveSkills, readSkillActiveState } from '../state/skill-active.js';
+import { readRunState } from '../runtime/run-state.js';
 import {
   readSubagentSessionSummary,
   type SubagentSessionSummary,
@@ -37,6 +38,7 @@ export interface SessionStatusDeps {
   readSubagentSessionSummaryImpl?: typeof readSubagentSessionSummary;
   getSkillActiveStatePathsImpl?: typeof getSkillActiveStatePaths;
   readSkillActiveStateImpl?: typeof readSkillActiveState;
+  readRunStateImpl?: typeof readRunState;
 }
 
 export function isDiscordStatusCommand(input: string): boolean {
@@ -84,12 +86,13 @@ async function readRelevantSkillState(
   sessionId: string,
   deps: Pick<
     SessionStatusDeps,
-    'existsSyncImpl' | 'getSkillActiveStatePathsImpl' | 'readSkillActiveStateImpl'
+    'existsSyncImpl' | 'getSkillActiveStatePathsImpl' | 'readSkillActiveStateImpl' | 'readRunStateImpl'
   >,
 ): Promise<SkillStateSummary | null> {
   const existsSyncImpl = deps.existsSyncImpl ?? existsSync;
   const getSkillActiveStatePathsImpl = deps.getSkillActiveStatePathsImpl ?? getSkillActiveStatePaths;
   const readSkillActiveStateImpl = deps.readSkillActiveStateImpl ?? readSkillActiveState;
+  const readRunStateImpl = deps.readRunStateImpl ?? readRunState;
   const { rootPath, sessionPath } = getSkillActiveStatePathsImpl(projectPath, sessionId);
   const candidatePaths = [sessionPath, rootPath].filter((value): value is string => typeof value === 'string');
 
@@ -107,10 +110,19 @@ async function readRelevantSkillState(
     const skill = primary?.skill || (typeof state.skill === 'string' ? state.skill.trim() : '');
     const phase = primary?.phase || (typeof state.phase === 'string' ? state.phase.trim() : '');
     const updatedAt = typeof state.updated_at === 'string' ? state.updated_at.trim() : '';
+    const runState = skill ? await readRunStateImpl(projectPath, sessionId) : null;
+    const hasDurableRuntime = Boolean(
+      skill
+      && runState?.active === true
+      && typeof runState.mode === 'string'
+      && runState.mode.trim() === skill,
+    );
 
     return {
-      ...(skill ? { skill } : {}),
-      ...(phase ? { phase } : {}),
+      ...(hasDurableRuntime && skill ? { skill } : {}),
+      ...(hasDurableRuntime
+        ? { phase: (runState?.current_phase?.trim() || phase || undefined) }
+        : {}),
       ...(updatedAt ? { updatedAt } : {}),
     };
   }
