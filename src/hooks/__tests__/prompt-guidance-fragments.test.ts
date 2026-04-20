@@ -20,6 +20,19 @@ function extract(text: string, startMarker: string, endMarker: string): string {
 }
 
 describe('prompt-guidance fragments stay synced with generated surfaces', () => {
+  it('eliminates stale minimum-effort wording from shared fragment docs', () => {
+    for (const file of [
+      'docs/prompt-guidance-fragments/executor-shared.md',
+      'docs/prompt-guidance-fragments/planner-shared.md',
+      'docs/prompt-guidance-fragments/verifier-shared.md',
+    ]) {
+      const content = read(file);
+      assert.doesNotMatch(content, /compact, information-dense/i);
+      assert.doesNotMatch(content, /concise and evidence-dense/i);
+      assert.match(content, /quality-first/i);
+    }
+  });
+
   it('syncs root/template AGENTS shared guidance blocks', () => {
     const operating = read('docs/prompt-guidance-fragments/core-operating-principles.md').trim();
     const verifySeq = read('docs/prompt-guidance-fragments/core-verification-and-sequencing.md').trim();
@@ -75,5 +88,10 @@ describe('prompt-guidance fragments stay synced with generated surfaces', () => 
       extract(content, '<!-- OMX:GUIDANCE:VERIFIER:INVESTIGATION:START -->', '<!-- OMX:GUIDANCE:VERIFIER:INVESTIGATION:END -->'),
       read('docs/prompt-guidance-fragments/verifier-investigation.md').trim(),
     );
+    assert.match(
+      content,
+      /Default final-output shape: quality-first and evidence-dense; think one more step before replying, and include as much detail as needed to justify the verdict without padding\./,
+    );
+    assert.doesNotMatch(content, /Default final-output shape: concise and evidence-dense/i);
   });
 });
