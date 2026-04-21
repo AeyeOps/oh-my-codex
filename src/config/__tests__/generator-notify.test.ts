@@ -123,7 +123,8 @@ describe('config generator', () => {
       assert.match(toml, /^model_reasoning_effort = "high"$/m);
       assert.match(toml, /^developer_instructions = "You have oh-my-codex installed/m);
       assert.match(toml, /AGENTS\.md is your orchestration brain and the main orchestration surface/);
-      assert.match(toml, /Use skill\/keyword routing like \$name plus spawned role-specialized subagents for specialized work/);
+      assert.match(toml, /Use skill\/keyword routing like \$omx:name for OMX workflows plus spawned role-specialized subagents for specialized work/);
+      assert.match(toml, /legacy \$name remains accepted by hooks for compatibility/);
       assert.match(toml, /Codex native subagents are available via \.codex\/agents/);
       assert.match(toml, /Treat installed prompts as narrower internal execution surfaces under AGENTS\.md authority/);
     } finally {
