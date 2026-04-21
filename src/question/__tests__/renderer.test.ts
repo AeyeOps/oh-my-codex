@@ -15,10 +15,10 @@ describe('resolveQuestionRendererStrategy', () => {
     );
   });
 
-  it('falls back to detached-tmux when tmux exists but TMUX is absent', () => {
+  it('fails closed when tmux exists but TMUX is absent', () => {
     assert.equal(
       resolveQuestionRendererStrategy({} as NodeJS.ProcessEnv, '/usr/bin/tmux'),
-      'detached-tmux',
+      'unsupported',
     );
   });
 
@@ -28,9 +28,53 @@ describe('resolveQuestionRendererStrategy', () => {
       'test-noop',
     );
   });
+
+  it('fails closed when neither attached tmux nor tmux binary exists', () => {
+    assert.equal(
+      resolveQuestionRendererStrategy({} as NodeJS.ProcessEnv, undefined),
+      'unsupported',
+    );
+  });
 });
 
 describe('launchQuestionRenderer', () => {
+  it('fails before building UI argv or invoking tmux when no visible renderer is available', () => {
+    const calls: string[][] = [];
+    const originalArgv1 = process.argv[1];
+    process.argv[1] = '';
+    try {
+      assert.throws(
+        () => launchQuestionRenderer(
+          {
+            cwd: '/repo',
+            recordPath: '/repo/.omx/state/sessions/s1/questions/question-1.json',
+            env: {} as NodeJS.ProcessEnv,
+          },
+          {
+            strategy: 'unsupported',
+            execTmux: (args) => {
+              calls.push(args);
+              return '';
+            },
+            sleepSync: () => {},
+          },
+        ),
+        (error) => {
+          assert.ok(error instanceof Error);
+          assert.match(error.message, /visible renderer/i);
+          assert.match(error.message, /attached tmux pane/i);
+          assert.match(error.message, /Run omx question from inside tmux/i);
+          assert.doesNotMatch(error.message, /tmux is unavailable/i);
+          return true;
+        },
+      );
+    } finally {
+      process.argv[1] = originalArgv1;
+    }
+
+    assert.deepEqual(calls, []);
+  });
+
   it('opens an interactive foreground split when already inside tmux', () => {
     const calls: string[][] = [];
     const result = launchQuestionRenderer(
