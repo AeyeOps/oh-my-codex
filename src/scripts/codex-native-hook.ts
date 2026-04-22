@@ -62,7 +62,10 @@ import {
   promptSignature,
   type TriageStateFile,
 } from "../hooks/triage-state.js";
-import { isPendingDeepInterviewQuestionEnforcement } from "../question/deep-interview.js";
+import {
+  isPendingDeepInterviewQuestionEnforcement,
+  reconcileDeepInterviewQuestionEnforcementFromAnsweredRecords,
+} from "../question/deep-interview.js";
 import { resolveOmxCliEntryPath } from "../utils/paths.js";
 
 type CodexHookEventName =
@@ -1082,6 +1085,7 @@ async function buildDeepInterviewQuestionStopOutput(
   sessionId: string,
   threadId: string,
 ): Promise<{ output: Record<string, unknown>; obligationId: string } | null> {
+  await reconcileDeepInterviewQuestionEnforcementFromAnsweredRecords(cwd, sessionId);
   const modeState = await readStopSessionPinnedState("deep-interview-state.json", cwd, sessionId);
   if (!modeState) return null;
 

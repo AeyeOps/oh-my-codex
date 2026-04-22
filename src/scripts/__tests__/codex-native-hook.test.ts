@@ -3479,6 +3479,91 @@ esac
     }
   });
 
+  it("does not re-block Stop after a same-session deep-interview question record is already answered", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-native-hook-stop-deep-interview-question-answered-"));
+    try {
+      const sessionId = "sess-stop-deep-interview-question-answered";
+      const stateDir = join(cwd, ".omx", "state");
+      const sessionDir = join(stateDir, "sessions", sessionId);
+      await mkdir(join(sessionDir, "questions"), { recursive: true });
+      await writeJson(join(stateDir, "session.json"), { session_id: sessionId });
+      await writeJson(join(sessionDir, "skill-active-state.json"), {
+        version: 1,
+        active: true,
+        skill: "deep-interview",
+        phase: "planning",
+        session_id: sessionId,
+        thread_id: "thread-stop-deep-interview-question-answered",
+      });
+      await writeJson(join(sessionDir, "deep-interview-state.json"), {
+        active: false,
+        mode: "deep-interview",
+        current_phase: "intent-first",
+        lifecycle_outcome: "askuserQuestion",
+        run_outcome: "blocked_on_user",
+        completed_at: "2026-04-19T03:20:30.000Z",
+        session_id: sessionId,
+        thread_id: "thread-stop-deep-interview-question-answered",
+        question_enforcement: {
+          obligation_id: "obligation-answered",
+          source: "omx-question",
+          status: "pending",
+          lifecycle_outcome: "askuserQuestion",
+          requested_at: "2026-04-19T03:20:00.000Z",
+        },
+      });
+      await writeJson(join(sessionDir, "questions", "question-answered.json"), {
+        kind: "omx.question/v1",
+        question_id: "question-answered",
+        session_id: sessionId,
+        created_at: "2026-04-19T03:20:05.000Z",
+        updated_at: "2026-04-19T03:20:10.000Z",
+        status: "answered",
+        question: "What should happen next?",
+        options: [{ label: "Continue", value: "continue" }],
+        allow_other: false,
+        other_label: "Other",
+        multi_select: false,
+        type: "single-answerable",
+        source: "deep-interview",
+        answer: {
+          kind: "option",
+          value: "continue",
+          selected_labels: ["Continue"],
+          selected_values: ["continue"],
+        },
+      });
+
+      const result = await dispatchCodexNativeHook(
+        {
+          hook_event_name: "Stop",
+          cwd,
+          session_id: sessionId,
+          thread_id: "thread-stop-deep-interview-question-answered",
+        },
+        { cwd },
+      );
+
+      assert.equal(result.omxEventName, "stop");
+      assert.equal(result.outputJson, null);
+
+      const state = JSON.parse(
+        await readFile(join(sessionDir, "deep-interview-state.json"), "utf-8"),
+      ) as {
+        lifecycle_outcome?: string;
+        question_enforcement?: { status?: string; question_id?: string; satisfied_at?: string };
+        run_outcome?: string;
+      };
+      assert.equal(state.question_enforcement?.status, "satisfied");
+      assert.equal(state.question_enforcement?.question_id, "question-answered");
+      assert.ok(state.question_enforcement?.satisfied_at);
+      assert.equal(state.lifecycle_outcome, undefined);
+      assert.equal(state.run_outcome, undefined);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
   it("keeps blocking pending deep-interview question Stop replays until the obligation changes", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "omx-native-hook-stop-deep-interview-question-replay-"));
     try {
