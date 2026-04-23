@@ -1845,6 +1845,63 @@ process.on('SIGTERM', () => {
   });
 
 
+  it('monitorTeam withholds terminal phase while a live worker still reports active status', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'omx-runtime-live-worker-terminal-'));
+    const prevTeamStateRoot = process.env.OMX_TEAM_STATE_ROOT;
+    delete process.env.OMX_TEAM_STATE_ROOT;
+    try {
+      await initTeamState('team-live-worker-terminal', 'live worker terminal guard', 'executor', 1, cwd);
+      const task = await createTask(
+        'team-live-worker-terminal',
+        {
+          subject: 'code change',
+          description: 'implement feature',
+          status: 'completed',
+          owner: 'worker-1',
+          requires_code_change: false,
+        },
+        cwd,
+      );
+
+      await updateWorkerHeartbeat(
+        'team-live-worker-terminal',
+        'worker-1',
+        { pid: process.pid, last_turn_at: new Date().toISOString(), turn_count: 1, alive: true },
+        cwd,
+      );
+      await writeWorkerStatus('team-live-worker-terminal', 'worker-1', {
+        state: 'working',
+        current_task_id: task.id,
+        updated_at: new Date().toISOString(),
+      }, cwd);
+
+      const active = await monitorTeam('team-live-worker-terminal', cwd);
+      assert.ok(active);
+      assert.equal(active?.allTasksTerminal, true);
+      assert.equal(active?.terminalBlockedByLiveWorkers, true);
+      assert.equal(active?.phase, 'team-verify');
+      assert.equal(
+        active?.recommendations.some((r) => r.includes('Terminal phase withheld') && r.includes('worker-1:working')),
+        true,
+      );
+
+      await writeWorkerStatus('team-live-worker-terminal', 'worker-1', {
+        state: 'idle',
+        updated_at: new Date().toISOString(),
+      }, cwd);
+
+      const idle = await monitorTeam('team-live-worker-terminal', cwd);
+      assert.ok(idle);
+      assert.equal(idle?.terminalBlockedByLiveWorkers, false);
+      assert.equal(idle?.phase, 'complete');
+    } finally {
+      if (typeof prevTeamStateRoot === 'string') process.env.OMX_TEAM_STATE_ROOT = prevTeamStateRoot;
+      else delete process.env.OMX_TEAM_STATE_ROOT;
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+
 
   it('monitorTeam deactivates root team-state.json when the local phase becomes terminal', async () => {
     const cwd = await mkdtemp(join(tmpdir(), 'omx-runtime-root-team-state-'));

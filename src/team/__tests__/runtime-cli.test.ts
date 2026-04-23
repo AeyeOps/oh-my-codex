@@ -100,7 +100,7 @@ describe('runtime-cli helpers', () => {
     }
   });
 
-  it('does not auto-shutdown merely because monitorTeam reaches complete', async () => {
+  it('keeps runtime non-terminal when tasks are terminal but a live worker is still active', async () => {
     const cwd = await mkdtemp(join(tmpdir(), 'omx-runtime-cli-complete-'));
     const previousTeamStateRoot = process.env.OMX_TEAM_STATE_ROOT;
     delete process.env.OMX_TEAM_STATE_ROOT;
@@ -113,12 +113,27 @@ describe('runtime-cli helpers', () => {
         owner: 'worker-1',
       }, cwd);
 
+      const { updateWorkerHeartbeat, writeWorkerStatus } = await import('../state.js');
+      await updateWorkerHeartbeat(
+        'runtime-cli-complete',
+        'worker-1',
+        { pid: process.pid, last_turn_at: new Date().toISOString(), turn_count: 1, alive: true },
+        cwd,
+      );
+      await writeWorkerStatus('runtime-cli-complete', 'worker-1', {
+        state: 'working',
+        current_task_id: '1',
+        updated_at: new Date().toISOString(),
+      }, cwd);
+
       const teamRoot = join(cwd, '.omx', 'state', 'team', 'runtime-cli-complete');
       assert.equal(existsSync(teamRoot), true);
 
       const runtimeCli = await loadRuntimeCliModule();
       const snapshot = await (await import('../runtime.js')).monitorTeam('runtime-cli-complete', cwd);
-      assert.equal(snapshot?.phase, 'complete');
+      assert.equal(snapshot?.allTasksTerminal, true);
+      assert.equal(snapshot?.terminalBlockedByLiveWorkers, true);
+      assert.equal(snapshot?.phase, 'team-verify');
 
       assert.equal(existsSync(teamRoot), true);
       assert.equal(typeof runtimeCli.shutdownWithForceFallback, 'function');
