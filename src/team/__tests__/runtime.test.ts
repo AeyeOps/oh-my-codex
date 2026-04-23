@@ -1848,7 +1848,6 @@ process.on('SIGTERM', () => {
   it('monitorTeam withholds terminal phase while a live worker still reports active status', async () => {
     const cwd = await mkdtemp(join(tmpdir(), 'omx-runtime-live-worker-terminal-'));
     const prevTeamStateRoot = process.env.OMX_TEAM_STATE_ROOT;
-    const prevLaunchMode = process.env.OMX_TEAM_WORKER_LAUNCH_MODE;
     delete process.env.OMX_TEAM_STATE_ROOT;
     try {
       await initTeamState('team-live-worker-terminal', 'live worker terminal guard', 'executor', 1, cwd);
@@ -1863,6 +1862,7 @@ process.on('SIGTERM', () => {
         },
         cwd,
       );
+
       await updateWorkerHeartbeat(
         'team-live-worker-terminal',
         'worker-1',
@@ -1897,8 +1897,6 @@ process.on('SIGTERM', () => {
     } finally {
       if (typeof prevTeamStateRoot === 'string') process.env.OMX_TEAM_STATE_ROOT = prevTeamStateRoot;
       else delete process.env.OMX_TEAM_STATE_ROOT;
-      if (typeof prevLaunchMode === 'string') process.env.OMX_TEAM_WORKER_LAUNCH_MODE = prevLaunchMode;
-      else delete process.env.OMX_TEAM_WORKER_LAUNCH_MODE;
       await rm(cwd, { recursive: true, force: true });
     }
   });
