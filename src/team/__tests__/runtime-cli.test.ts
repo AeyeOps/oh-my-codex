@@ -105,8 +105,14 @@ describe('runtime-cli helpers', () => {
     const previousTeamStateRoot = process.env.OMX_TEAM_STATE_ROOT;
     const previousLaunchMode = process.env.OMX_TEAM_WORKER_LAUNCH_MODE;
     delete process.env.OMX_TEAM_STATE_ROOT;
+    process.env.OMX_TEAM_WORKER_LAUNCH_MODE = 'prompt';
     try {
       await initTeamState('runtime-cli-complete', 'task', 'executor', 1, cwd);
+      const config = await readTeamConfig('runtime-cli-complete', cwd);
+      assert.ok(config);
+      if (!config) return;
+      config.workers[0]!.pid = process.pid;
+      await saveTeamConfig(config, cwd);
       await createTask('runtime-cli-complete', {
         subject: 'done task',
         description: 'already complete',
