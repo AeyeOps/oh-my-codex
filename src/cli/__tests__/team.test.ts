@@ -670,6 +670,8 @@ describe('teamCommand api', () => {
       assert.match(logs[0] ?? '', /omx team api <operation>/);
       assert.match(logs[0] ?? '', /dedicated worktrees automatically by default/);
       assert.match(logs[0] ?? '', /--worktree is deprecated/);
+      assert.match(logs[0] ?? '', /tmux-runtime surface by default/);
+      assert.match(logs[0] ?? '', /Codex App or plain outside-tmux sessions/);
     } finally {
       console.log = originalLog;
     }
