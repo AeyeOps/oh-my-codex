@@ -10,10 +10,11 @@ import { type TeamPhaseState } from './state.js';
 
 export function inferPhaseTargetFromTaskCounts(
   taskCounts: { pending: number; blocked: number; in_progress: number; failed: number },
-  options: { verificationPending?: boolean } = {},
+  options: { verificationPending?: boolean; activeWorkersPreventTerminal?: boolean } = {},
 ): TeamPhase | TerminalPhase {
   const allTasksTerminal = taskCounts.pending === 0 && taskCounts.blocked === 0 && taskCounts.in_progress === 0;
   if (allTasksTerminal && taskCounts.failed === 0) {
+    if (options.activeWorkersPreventTerminal) return 'team-verify';
     if (options.verificationPending) return 'team-verify';
     return 'complete';
   }

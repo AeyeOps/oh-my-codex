@@ -27,6 +27,16 @@ describe('phase-controller', () => {
     );
   });
 
+  it('infers team-verify when live workers still own active terminal authority', () => {
+    assert.equal(
+      inferPhaseTargetFromTaskCounts(
+        { pending: 0, blocked: 0, in_progress: 0, failed: 0 },
+        { activeWorkersPreventTerminal: true },
+      ),
+      'team-verify',
+    );
+  });
+
   it('advances team-exec to complete via verify stage', () => {
     const next = reconcilePhaseStateForMonitor(
       {

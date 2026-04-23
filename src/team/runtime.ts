@@ -149,6 +149,7 @@ export interface TeamSnapshot {
   deadWorkers: string[];
   nonReportingWorkers: string[];
   recommendations: string[];
+  terminalBlockedByLiveWorkers: boolean;
   performance?: {
     list_tasks_ms: number;
     worker_scan_ms: number;
@@ -156,6 +157,10 @@ export interface TeamSnapshot {
     total_ms: number;
     updated_at: string;
   };
+}
+
+function workerStatusPreventsTerminal(status: WorkerStatus): boolean {
+  return status.state === 'working' || status.state === 'blocked' || status.state === 'draining';
 }
 
 async function syncRootTeamModeStateOnTerminalPhase(
@@ -2046,6 +2051,16 @@ export async function monitorTeam(teamName: string, cwd: string): Promise<TeamSn
   }
 
   const allTasksTerminal = taskCounts.pending === 0 && taskCounts.blocked === 0 && taskCounts.in_progress === 0;
+  const terminalBlockedByLiveWorkers = allTasksTerminal && workers.some(
+    (worker) => worker.alive && workerStatusPreventsTerminal(worker.status),
+  );
+  if (terminalBlockedByLiveWorkers) {
+    const blockingWorkers = workers
+      .filter((worker) => worker.alive && workerStatusPreventsTerminal(worker.status))
+      .map((worker) => `${worker.name}:${worker.status.state}`);
+    recommendations.push(`Terminal phase withheld while live worker signals remain active: ${blockingWorkers.join(', ')}`);
+  }
+
   const deadWorkerStall =
     config.worker_launch_mode === 'prompt'
     && config.workers.length > 0
@@ -2057,6 +2072,7 @@ export async function monitorTeam(teamName: string, cwd: string): Promise<TeamSn
     ? 'failed'
     : inferPhaseTargetFromTaskCounts(taskCounts, {
       verificationPending: verificationPendingTasks.length > 0,
+      activeWorkersPreventTerminal: terminalBlockedByLiveWorkers,
     });
   const phaseState: TeamPhaseState = reconcilePhaseStateForMonitor(persistedPhase, targetPhase);
   await writeTeamPhaseState(sanitized, phaseState, cwd);
@@ -2138,6 +2154,7 @@ export async function monitorTeam(teamName: string, cwd: string): Promise<TeamSn
     deadWorkers,
     nonReportingWorkers,
     recommendations,
+    terminalBlockedByLiveWorkers,
     performance: {
       list_tasks_ms: Number(listTasksMs.toFixed(2)),
       worker_scan_ms: Number(workerScanMs.toFixed(2)),

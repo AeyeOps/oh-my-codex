@@ -22,6 +22,7 @@ function makeSnapshot(phase: TeamSnapshot['phase']): TeamSnapshot {
     deadWorkers: [],
     nonReportingWorkers: [],
     recommendations: [],
+    terminalBlockedByLiveWorkers: false,
   };
 }
 
