@@ -103,6 +103,7 @@ describe('runtime-cli helpers', () => {
   it('keeps runtime non-terminal when tasks are terminal but a live worker is still active', async () => {
     const cwd = await mkdtemp(join(tmpdir(), 'omx-runtime-cli-complete-'));
     const previousTeamStateRoot = process.env.OMX_TEAM_STATE_ROOT;
+    const previousLaunchMode = process.env.OMX_TEAM_WORKER_LAUNCH_MODE;
     delete process.env.OMX_TEAM_STATE_ROOT;
     try {
       await initTeamState('runtime-cli-complete', 'task', 'executor', 1, cwd);
@@ -140,6 +141,8 @@ describe('runtime-cli helpers', () => {
     } finally {
       if (typeof previousTeamStateRoot === 'string') process.env.OMX_TEAM_STATE_ROOT = previousTeamStateRoot;
       else delete process.env.OMX_TEAM_STATE_ROOT;
+      if (typeof previousLaunchMode === 'string') process.env.OMX_TEAM_WORKER_LAUNCH_MODE = previousLaunchMode;
+      else delete process.env.OMX_TEAM_WORKER_LAUNCH_MODE;
       await rm(cwd, { recursive: true, force: true });
     }
   });
