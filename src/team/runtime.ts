@@ -2060,6 +2060,7 @@ export async function monitorTeam(teamName: string, cwd: string): Promise<TeamSn
       .map((worker) => `${worker.name}:${worker.status.state}`);
     recommendations.push(`Terminal phase withheld while live worker signals remain active: ${blockingWorkers.join(', ')}`);
   }
+
   const deadWorkerStall =
     config.worker_launch_mode === 'prompt'
     && config.workers.length > 0
