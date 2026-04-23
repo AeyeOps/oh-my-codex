@@ -481,8 +481,21 @@ async function ensureOmxLocalIgnoreEntry(cwd: string): Promise<{ changed: boolea
 async function buildSessionStartContext(
   cwd: string,
   sessionId: string,
+  options: {
+    hookEventName?: CodexHookEventName | null;
+    payload?: CodexHookPayload;
+    canonicalSessionId?: string;
+    nativeSessionId?: string;
+  } = {},
 ): Promise<string | null> {
   const sections: string[] = [];
+
+  sections.push(buildExecutionEnvironmentSection(cwd, {
+    hookEventName: options.hookEventName,
+    payload: options.payload,
+    canonicalSessionId: options.canonicalSessionId,
+    nativeSessionId: options.nativeSessionId,
+  }));
 
   const localIgnoreResult = await ensureOmxLocalIgnoreEntry(cwd);
   if (localIgnoreResult.changed) {
@@ -574,6 +587,135 @@ async function buildSessionStartContext(
   return sections.length > 0 ? sections.join("\n\n") : null;
 }
 
+type ExecutionEnvironmentKind =
+  | "attached-tmux-runtime"
+  | "outside-tmux-with-bridge"
+  | "native-outside-tmux"
+  | "direct-cli-outside-tmux";
+
+interface ExecutionEnvironmentInfo {
+  kind: ExecutionEnvironmentKind;
+  surface: string;
+  tmuxWorkflowGuidance: string;
+  questionGuidance: string;
+  teamRuntimeInstruction: string;
+  teamHelpInstruction: string;
+  deepInterviewInstruction: string;
+  leaderPaneHint: string;
+}
+
+function readPersistedSessionStateSync(cwd: string): Record<string, unknown> | null {
+  try {
+    const path = join(cwd, ".omx", "state", "session.json");
+    if (!existsSync(path)) return null;
+    const parsed = JSON.parse(readFileSync(path, "utf-8")) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function resolveExecutionEnvironment(
+  cwd: string,
+  options: {
+    hookEventName?: CodexHookEventName | null;
+    payload?: CodexHookPayload;
+    canonicalSessionId?: string;
+    nativeSessionId?: string;
+  } = {},
+): ExecutionEnvironmentInfo {
+  const tmux = safeString(process.env.TMUX).trim();
+  const leaderPaneHint = resolveQuestionLeaderPaneHint(cwd, options.payload);
+  const payloadSessionId = safeString(options.payload?.session_id ?? options.payload?.sessionId).trim();
+  const payloadSource = safeString(options.payload?.source).trim().toLowerCase();
+  const persistedSession = readPersistedSessionStateSync(cwd);
+  const persistedNativeSessionId = safeString(persistedSession?.native_session_id).trim();
+  const explicitCliSource = payloadSource === "cli" || payloadSource === "shell" || payloadSource === "terminal";
+  const explicitNativeSource = payloadSource === "native" || payloadSource === "codex-app" || payloadSource === "app";
+  const looksLikeNativeSession =
+    !explicitCliSource && (
+      explicitNativeSource
+      || (options.hookEventName === "SessionStart" && safeString(options.nativeSessionId).trim() !== "")
+      || (!!payloadSessionId && payloadSessionId === persistedNativeSessionId)
+      || (!!safeString(options.nativeSessionId).trim() && safeString(options.canonicalSessionId).trim() !== safeString(options.nativeSessionId).trim())
+    );
+  const questionBridgeHint = leaderPaneHint
+    ? `bridge available via ${leaderPaneHint}; renderer/runtime still validates the target live at launch`
+    : "no visible renderer or tmux bridge detected; it will fail closed until you run inside attached tmux or preserve `OMX_QUESTION_RETURN_PANE`";
+
+  if (tmux) {
+    return {
+      kind: "attached-tmux-runtime",
+      surface: "attached tmux runtime",
+      tmuxWorkflowGuidance: "tmux-only workflows are directly usable in this session",
+      questionGuidance: "visible renderer available from the current pane",
+      teamRuntimeInstruction: "Use the durable OMX team runtime via `omx team ...` for coordinated execution; do not replace it with in-process fanout.",
+      teamHelpInstruction: "If you need runtime syntax, run `omx team --help` yourself.",
+      deepInterviewInstruction: "Deep-interview must ask each interview round via `omx question`; do not fall back to `request_user_input` or plain-text questioning. This session is already attached to tmux, so `omx question` can open its visible renderer directly. After starting `omx question` in a background terminal, wait for that terminal to finish and read the JSON answer before continuing the interview. Stop remains blocked while a deep-interview question obligation is pending.",
+      leaderPaneHint,
+    };
+  }
+
+  if (leaderPaneHint) {
+    const omxBin = resolveOmxCliEntryPath({ cwd }) || process.argv[1] || "omx";
+    const bridgeCommand = `OMX_QUESTION_RETURN_PANE=${shellEscapeSingle(leaderPaneHint)} ${shellEscapeSingle(process.execPath)} ${shellEscapeSingle(omxBin)} question`;
+    return {
+      kind: "outside-tmux-with-bridge",
+      surface: "outside tmux with tmux return bridge",
+      tmuxWorkflowGuidance: "tmux-only workflows are not directly usable from this surface; launch OMX CLI from an attached tmux shell for `$team` / `omx team`",
+      questionGuidance: questionBridgeHint,
+      teamRuntimeInstruction: "This session is outside tmux; `omx team` is a CLI/tmux runtime surface, not directly available here. Launch OMX CLI from an attached tmux shell first; do not replace it with in-process fanout.",
+      teamHelpInstruction: "If you need runtime syntax, run `omx team --help` from an attached tmux OMX CLI shell.",
+      deepInterviewInstruction: `Deep-interview must ask each interview round via \`omx question\`; do not fall back to \`request_user_input\` or plain-text questioning. This session is outside tmux but has a tmux return bridge, so invoke the current-session CLI bridge command: \`${bridgeCommand}\`. When using Bash/background-terminal tool paths, preserve the leader pane by exporting \`OMX_QUESTION_RETURN_PANE=${leaderPaneHint}\` (or equivalent) before invoking \`omx question\`. After starting \`omx question\` in a background terminal, wait for that terminal to finish and read the JSON answer before continuing the interview. Stop remains blocked while a deep-interview question obligation is pending.`,
+      leaderPaneHint,
+    };
+  }
+
+  const isNativeOutsideTmux = looksLikeNativeSession;
+  const surface = isNativeOutsideTmux
+    ? "native-hook / Codex App outside tmux"
+    : "direct CLI outside tmux";
+  const teamRuntimeInstruction = isNativeOutsideTmux
+    ? "This session is native-hook / Codex App outside tmux; `omx team` is a CLI/tmux runtime surface, not directly available here. Launch OMX CLI from an attached tmux shell first; do not replace it with in-process fanout."
+    : "This session is direct CLI outside tmux; `omx team` is a CLI/tmux runtime surface, not directly available here. Move into an attached tmux OMX CLI shell first; do not replace it with in-process fanout.";
+  const teamHelpInstruction = isNativeOutsideTmux
+    ? "If you need runtime syntax, run `omx team --help` from an attached tmux OMX CLI shell rather than from Codex App/native outside-tmux context."
+    : "If you need runtime syntax, run `omx team --help` from an attached tmux OMX CLI shell.";
+  const omxBin = resolveOmxCliEntryPath({ cwd }) || process.argv[1] || "omx";
+  const fallbackBridgeCommand = `${shellEscapeSingle(process.execPath)} ${shellEscapeSingle(omxBin)} question`;
+
+  return {
+    kind: isNativeOutsideTmux ? "native-outside-tmux" : "direct-cli-outside-tmux",
+    surface,
+    tmuxWorkflowGuidance: "tmux-only workflows are not directly usable from this surface; launch OMX CLI from an attached tmux shell when you actually need tmux runtime workflows",
+    questionGuidance: questionBridgeHint,
+    teamRuntimeInstruction,
+    teamHelpInstruction,
+    deepInterviewInstruction: `Deep-interview must ask each interview round via \`omx question\`; do not fall back to \`request_user_input\` or plain-text questioning. This session is outside tmux and no visible renderer/runtime bridge is available, so \`omx question\` will fail closed here until you move into an attached tmux OMX CLI session or preserve \`OMX_QUESTION_RETURN_PANE\` from one. Once a bridge exists, the current-session CLI bridge command is: \`${fallbackBridgeCommand}\`. After starting \`omx question\` in a background terminal, wait for that terminal to finish and read the JSON answer before continuing the interview. Stop remains blocked while a deep-interview question obligation is pending.`,
+    leaderPaneHint: "",
+  };
+}
+
+function buildExecutionEnvironmentSection(
+  cwd: string,
+  options: {
+    hookEventName?: CodexHookEventName | null;
+    payload?: CodexHookPayload;
+    canonicalSessionId?: string;
+    nativeSessionId?: string;
+  } = {},
+): string {
+  const environment = resolveExecutionEnvironment(cwd, options);
+  return [
+    "[Execution environment]",
+    `- surface: ${environment.surface}`,
+    `- tmux workflows: ${environment.tmuxWorkflowGuidance}`,
+    `- omx question: ${environment.questionGuidance}`,
+  ].join("\n");
+}
+
 function resolveQuestionLeaderPaneHint(cwd: string, payload?: CodexHookPayload): string {
   const payloadSessionId = safeString(payload?.session_id).trim();
   const envSessionId = safeString(process.env.OMX_SESSION_ID || process.env.CODEX_SESSION_ID || process.env.SESSION_ID).trim();
@@ -601,15 +743,27 @@ function resolveQuestionLeaderPaneHint(cwd: string, payload?: CodexHookPayload):
 }
 
 function buildDeepInterviewQuestionBridgeInstruction(cwd: string, payload?: CodexHookPayload): string {
-  const omxBin = resolveOmxCliEntryPath({ cwd }) || process.argv[1] || "omx";
-  const leaderPaneHint = resolveQuestionLeaderPaneHint(cwd, payload);
-  const bridgeCommand = leaderPaneHint
-    ? `OMX_QUESTION_RETURN_PANE=${shellEscapeSingle(leaderPaneHint)} ${shellEscapeSingle(process.execPath)} ${shellEscapeSingle(omxBin)} question`
-    : `${shellEscapeSingle(process.execPath)} ${shellEscapeSingle(omxBin)} question`;
-  const enforcementNote = leaderPaneHint
-    ? ` When using Bash/background-terminal tool paths, preserve the leader pane by exporting \`OMX_QUESTION_RETURN_PANE=${leaderPaneHint}\` (or equivalent) before invoking \`omx question\`.`
-    : '';
-  return `Deep-interview must ask each interview round via \`omx question\`; do not fall back to \`request_user_input\` or plain-text questioning. After starting \`omx question\` in a background terminal, wait for that terminal to finish and read the JSON answer before continuing the interview. If bare \`omx question\` is unavailable in this reused session, use the current-session CLI bridge command: \`${bridgeCommand}\`.${enforcementNote} Stop remains blocked while a deep-interview question obligation is pending.`;
+  return resolveExecutionEnvironment(cwd, {
+    hookEventName: "UserPromptSubmit",
+    payload,
+    nativeSessionId: safeString(payload?.session_id ?? payload?.sessionId).trim(),
+  }).deepInterviewInstruction;
+}
+
+function buildTeamRuntimeInstruction(cwd: string, payload?: CodexHookPayload): string {
+  return resolveExecutionEnvironment(cwd, {
+    hookEventName: "UserPromptSubmit",
+    payload,
+    nativeSessionId: safeString(payload?.session_id ?? payload?.sessionId).trim(),
+  }).teamRuntimeInstruction;
+}
+
+function buildTeamHelpInstruction(cwd: string, payload?: CodexHookPayload): string {
+  return resolveExecutionEnvironment(cwd, {
+    hookEventName: "UserPromptSubmit",
+    payload,
+    nativeSessionId: safeString(payload?.session_id ?? payload?.sessionId).trim(),
+  }).teamHelpInstruction;
 }
 
 function buildAdditionalContextMessage(
@@ -672,9 +826,9 @@ function buildAdditionalContextMessage(
         ? `skill: ${skillState.initialized_mode} activated and initial state initialized at ${skillState.initialized_state_path}; write subsequent updates via omx_state MCP.`
         : null,
       teamDetected
-        ? "Use the durable OMX team runtime via `omx team ...` for coordinated execution; do not replace it with in-process fanout."
+        ? buildTeamRuntimeInstruction(cwd, payload)
         : null,
-      teamDetected ? "If you need runtime syntax, run `omx team --help` yourself." : null,
+      teamDetected ? buildTeamHelpInstruction(cwd, payload) : null,
       'Follow AGENTS.md routing and preserve workflow transition and planning-safety rules.',
     ].filter(Boolean).join(' ');
   }
@@ -693,8 +847,8 @@ function buildAdditionalContextMessage(
       initializedStateMessage,
       deepInterviewPromptActivationNote,
       ultraworkPromptActivationNote,
-      "Use the durable OMX team runtime via `omx team ...` for coordinated execution; do not replace it with in-process fanout.",
-      "If you need runtime syntax, run `omx team --help` yourself.",
+      buildTeamRuntimeInstruction(cwd, payload),
+      buildTeamHelpInstruction(cwd, payload),
       "Follow AGENTS.md routing and preserve workflow transition and planning-safety rules.",
     ].filter(Boolean).join(" ");
   }
@@ -1853,7 +2007,12 @@ export async function dispatchCodexNativeHook(
 
   if (hookEventName === "SessionStart" || hookEventName === "UserPromptSubmit") {
     const additionalContext = hookEventName === "SessionStart"
-      ? await buildSessionStartContext(cwd, canonicalSessionId || nativeSessionId)
+      ? await buildSessionStartContext(cwd, canonicalSessionId || nativeSessionId, {
+        hookEventName,
+        payload,
+        canonicalSessionId,
+        nativeSessionId: resolvedNativeSessionId || nativeSessionId,
+      })
       : (buildAdditionalContextMessage(readPromptText(payload), skillState, cwd, payload) ?? triageAdditionalContext);
     if (additionalContext) {
       outputJson = {

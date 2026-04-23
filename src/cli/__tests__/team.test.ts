@@ -651,6 +651,8 @@ describe('teamCommand api', () => {
       assert.match(logs[0] ?? '', /omx team api <operation>/);
       assert.match(logs[0] ?? '', /dedicated worktrees automatically by default/);
       assert.match(logs[0] ?? '', /--worktree is deprecated/);
+      assert.match(logs[0] ?? '', /tmux-runtime surface by default/);
+      assert.match(logs[0] ?? '', /Codex App or plain outside-tmux sessions/);
       assert.match(logs[0] ?? '', /native Codex subagents for small in-session fanout/);
     } finally {
       console.log = originalLog;
@@ -668,6 +670,8 @@ describe('teamCommand api', () => {
       assert.match(logs[0] ?? '', /omx team api <operation>/);
       assert.match(logs[0] ?? '', /dedicated worktrees automatically by default/);
       assert.match(logs[0] ?? '', /--worktree is deprecated/);
+      assert.match(logs[0] ?? '', /tmux-runtime surface by default/);
+      assert.match(logs[0] ?? '', /Codex App or plain outside-tmux sessions/);
     } finally {
       console.log = originalLog;
     }
