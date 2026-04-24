@@ -1163,14 +1163,15 @@ export async function onHookEvent(event) {
     }
   });
 
-  it("nudges $team prompt-submit routing toward omx team runtime usage", async () => {
-    const cwd = await mkdtemp(join(tmpdir(), "omx-native-hook-team-"));
+  it("denies direct $team prompt activation from Codex App/native outside tmux", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-native-hook-team-native-block-"));
     try {
       await mkdir(join(cwd, ".omx", "state"), { recursive: true });
       const result = await dispatchCodexNativeHook(
         {
           hook_event_name: "UserPromptSubmit",
           cwd,
+          source: "codex-app",
           session_id: "sess-team-1",
           thread_id: "thread-team-1",
           turn_id: "turn-team-1",
@@ -1181,20 +1182,76 @@ export async function onHookEvent(event) {
 
       assert.equal(result.omxEventName, "keyword-detector");
       assert.equal(result.skillState?.skill, "team");
-      assert.match(
-        JSON.stringify(result.outputJson),
-        /skill: team activated and initial state initialized at \.omx\/state\/team-state\.json; write subsequent updates via omx_state MCP\./,
+      assert.equal(result.skillState?.active, false);
+      assert.match(String(result.skillState?.transition_error || ""), /cannot activate the tmux-only `team` workflow directly/);
+      const message = String(
+        (result.outputJson as { hookSpecificOutput?: { additionalContext?: string } } | null)?.hookSpecificOutput?.additionalContext ?? "",
       );
-      assert.match(JSON.stringify(result.outputJson), /outside tmux/);
-      assert.match(JSON.stringify(result.outputJson), /`omx team` is a CLI\/tmux runtime surface, not directly available here/);
-      assert.match(JSON.stringify(result.outputJson), /attached tmux OMX CLI shell/);
+      assert.match(message, /denied workflow keyword "\$team" -> team/);
+      assert.match(message, /attached tmux shell first/);
+      assert.equal(existsSync(join(cwd, ".omx", "state", "team-state.json")), false);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
 
-      const state = JSON.parse(
-        await readFile(join(cwd, ".omx", "state", "team-state.json"), "utf-8"),
-      ) as { mode?: string; active?: boolean; current_phase?: string };
-      assert.equal(state.mode, "team");
-      assert.equal(state.active, true);
-      assert.equal(state.current_phase, "starting");
+  it("still denies direct $team prompt activation from Codex App/native outside tmux when a tmux return bridge exists", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-native-hook-team-native-bridge-block-"));
+    try {
+      await mkdir(join(cwd, ".omx", "state", "sessions", "sess-team-bridge"), { recursive: true });
+      await writeJson(join(cwd, ".omx", "state", "sessions", "sess-team-bridge", "ralph-state.json"), {
+        mode: "ralph",
+        active: true,
+        tmux_pane_id: "%42",
+      });
+      const result = await dispatchCodexNativeHook(
+        {
+          hook_event_name: "UserPromptSubmit",
+          cwd,
+          source: "codex-app",
+          session_id: "sess-team-bridge",
+          thread_id: "thread-team-bridge",
+          turn_id: "turn-team-bridge",
+          prompt: "$team ship this fix with verification",
+        },
+        { cwd },
+      );
+
+      assert.equal(result.omxEventName, "keyword-detector");
+      assert.equal(result.skillState?.skill, "team");
+      assert.equal(result.skillState?.active, false);
+      const message = String(
+        (result.outputJson as { hookSpecificOutput?: { additionalContext?: string } } | null)?.hookSpecificOutput?.additionalContext ?? "",
+      );
+      assert.match(message, /attached tmux shell first/);
+      assert.equal(existsSync(join(cwd, ".omx", "state", "team-state.json")), false);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps direct CLI outside-tmux $team prompt guidance compatible with manual shell launch", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-native-hook-team-cli-guidance-"));
+    try {
+      await mkdir(join(cwd, ".omx", "state"), { recursive: true });
+      const result = await dispatchCodexNativeHook(
+        {
+          hook_event_name: "UserPromptSubmit",
+          cwd,
+          source: "cli",
+          session_id: "sess-team-cli-guidance",
+          thread_id: "thread-team-cli-guidance",
+          turn_id: "turn-team-cli-guidance",
+          prompt: "$team ship this fix with verification",
+        },
+        { cwd },
+      );
+
+      const message = String(
+        (result.outputJson as { hookSpecificOutput?: { additionalContext?: string } } | null)?.hookSpecificOutput?.additionalContext ?? "",
+      );
+      assert.match(message, /run `omx team \.\.\.` yourself from shell/);
+      assert.doesNotMatch(message, /not directly available here/);
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }
@@ -1499,6 +1556,148 @@ esac
 
       assert.equal(result.omxEventName, "pre-tool-use");
       assert.equal((result.outputJson as { decision?: string } | null)?.decision, "block");
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("blocks native/App Bash omx question with bridge-specific outside-tmux guidance", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-native-hook-pretool-question-native-block-"));
+    try {
+      const result = await dispatchCodexNativeHook(
+        {
+          hook_event_name: "PreToolUse",
+          cwd,
+          source: "codex-app",
+          session_id: "sess-question-native-block",
+          tool_name: "Bash",
+          tool_use_id: "tool-question-native-block",
+          tool_input: { command: `omx question --json --input '{"question":"Q?","options":["A"],"allow_other":true}'` },
+        },
+        { cwd },
+      );
+
+      assert.equal(result.omxEventName, "pre-tool-use");
+      assert.equal((result.outputJson as { decision?: string } | null)?.decision, "block");
+      assert.match(String((result.outputJson as { reason?: string } | null)?.reason || ""), /Codex App\/native outside-tmux Bash sessions/);
+      assert.match(String((result.outputJson as { systemMessage?: string } | null)?.systemMessage || ""), /OMX_QUESTION_RETURN_PANE=\$TMUX_PANE/);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("allows native/App Bash omx question when the command preserves the tmux return bridge", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-native-hook-pretool-question-native-allow-"));
+    try {
+      const result = await dispatchCodexNativeHook(
+        {
+          hook_event_name: "PreToolUse",
+          cwd,
+          source: "codex-app",
+          session_id: "sess-question-native-allow",
+          tool_name: "Bash",
+          tool_use_id: "tool-question-native-allow",
+          tool_input: { command: `OMX_QUESTION_RETURN_PANE=$TMUX_PANE omx question --json --input '{"question":"Q?","options":["A"],"allow_other":true}'` },
+        },
+        { cwd },
+      );
+
+      assert.equal(result.omxEventName, "pre-tool-use");
+      assert.equal(result.outputJson, null);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("blocks Bash omx team from Codex App/native outside tmux", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-native-hook-pretool-team-native-block-"));
+    try {
+      const result = await dispatchCodexNativeHook(
+        {
+          hook_event_name: "PreToolUse",
+          cwd,
+          source: "codex-app",
+          session_id: "sess-team-native-block",
+          tool_name: "Bash",
+          tool_use_id: "tool-team-native-block",
+          tool_input: { command: "omx team status my-team" },
+        },
+        { cwd },
+      );
+
+      assert.equal(result.omxEventName, "pre-tool-use");
+      assert.equal((result.outputJson as { decision?: string } | null)?.decision, "block");
+      assert.match(String((result.outputJson as { reason?: string } | null)?.reason || ""), /cannot be launched directly from Codex App\/native outside-tmux Bash sessions/);
+      assert.match(String((result.outputJson as { systemMessage?: string } | null)?.systemMessage || ""), /launch OMX CLI from an attached tmux shell first/);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("blocks Bash node omx.js team from Codex App/native outside tmux", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-native-hook-pretool-team-node-native-block-"));
+    try {
+      const result = await dispatchCodexNativeHook(
+        {
+          hook_event_name: "PreToolUse",
+          cwd,
+          source: "codex-app",
+          session_id: "sess-team-node-native-block",
+          tool_name: "Bash",
+          tool_use_id: "tool-team-node-native-block",
+          tool_input: { command: "node ./dist/cli/omx.js team status my-team" },
+        },
+        { cwd },
+      );
+
+      assert.equal(result.omxEventName, "pre-tool-use");
+      assert.equal((result.outputJson as { decision?: string } | null)?.decision, "block");
+      assert.match(String((result.outputJson as { systemMessage?: string } | null)?.systemMessage || ""), /Codex App\/native outside-tmux sessions/);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("preserves direct CLI outside-tmux omx team Bash behavior", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-native-hook-pretool-team-cli-outside-"));
+    try {
+      const result = await dispatchCodexNativeHook(
+        {
+          hook_event_name: "PreToolUse",
+          cwd,
+          source: "cli",
+          session_id: "sess-team-cli-outside",
+          tool_name: "Bash",
+          tool_use_id: "tool-team-cli-outside",
+          tool_input: { command: "omx team status my-team" },
+        },
+        { cwd },
+      );
+
+      assert.equal(result.omxEventName, "pre-tool-use");
+      assert.equal(result.outputJson, null);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("preserves source-less outside-tmux omx team Bash behavior when no native session evidence exists", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-native-hook-pretool-team-cli-nosource-"));
+    try {
+      const result = await dispatchCodexNativeHook(
+        {
+          hook_event_name: "PreToolUse",
+          cwd,
+          session_id: "sess-team-cli-nosource",
+          tool_name: "Bash",
+          tool_use_id: "tool-team-cli-nosource",
+          tool_input: { command: "omx team status my-team" },
+        },
+        { cwd },
+      );
+
+      assert.equal(result.omxEventName, "pre-tool-use");
+      assert.equal(result.outputJson, null);
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }

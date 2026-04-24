@@ -44,6 +44,11 @@ import {
   detectMcpTransportFailure,
 } from "./codex-native-pre-post.js";
 import {
+  resolveCodexExecutionSurface,
+  type CodexLauncherKind,
+  type CodexTransportKind,
+} from "./codex-execution-surface.js";
+import {
   buildNativeHookEvent,
 } from "../hooks/extensibility/events.js";
 import type { HookEventEnvelope } from "../hooks/extensibility/types.js";
@@ -595,6 +600,8 @@ type ExecutionEnvironmentKind =
 
 interface ExecutionEnvironmentInfo {
   kind: ExecutionEnvironmentKind;
+  launcher: CodexLauncherKind;
+  transport: CodexTransportKind;
   surface: string;
   tmuxWorkflowGuidance: string;
   questionGuidance: string;
@@ -602,19 +609,6 @@ interface ExecutionEnvironmentInfo {
   teamHelpInstruction: string;
   deepInterviewInstruction: string;
   leaderPaneHint: string;
-}
-
-function readPersistedSessionStateSync(cwd: string): Record<string, unknown> | null {
-  try {
-    const path = join(cwd, ".omx", "state", "session.json");
-    if (!existsSync(path)) return null;
-    const parsed = JSON.parse(readFileSync(path, "utf-8")) as unknown;
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-      ? parsed as Record<string, unknown>
-      : null;
-  } catch {
-    return null;
-  }
 }
 
 function resolveExecutionEnvironment(
@@ -626,28 +620,17 @@ function resolveExecutionEnvironment(
     nativeSessionId?: string;
   } = {},
 ): ExecutionEnvironmentInfo {
-  const tmux = safeString(process.env.TMUX).trim();
+  const executionSurface = resolveCodexExecutionSurface(cwd, options);
   const leaderPaneHint = resolveQuestionLeaderPaneHint(cwd, options.payload);
-  const payloadSessionId = safeString(options.payload?.session_id ?? options.payload?.sessionId).trim();
-  const payloadSource = safeString(options.payload?.source).trim().toLowerCase();
-  const persistedSession = readPersistedSessionStateSync(cwd);
-  const persistedNativeSessionId = safeString(persistedSession?.native_session_id).trim();
-  const explicitCliSource = payloadSource === "cli" || payloadSource === "shell" || payloadSource === "terminal";
-  const explicitNativeSource = payloadSource === "native" || payloadSource === "codex-app" || payloadSource === "app";
-  const looksLikeNativeSession =
-    !explicitCliSource && (
-      explicitNativeSource
-      || (options.hookEventName === "SessionStart" && safeString(options.nativeSessionId).trim() !== "")
-      || (!!payloadSessionId && payloadSessionId === persistedNativeSessionId)
-      || (!!safeString(options.nativeSessionId).trim() && safeString(options.canonicalSessionId).trim() !== safeString(options.nativeSessionId).trim())
-    );
   const questionBridgeHint = leaderPaneHint
     ? `bridge available via ${leaderPaneHint}; renderer/runtime still validates the target live at launch`
     : "no visible renderer or tmux bridge detected; it will fail closed until you run inside attached tmux or preserve `OMX_QUESTION_RETURN_PANE`";
 
-  if (tmux) {
+  if (executionSurface.transport === "attached-tmux") {
     return {
       kind: "attached-tmux-runtime",
+      launcher: executionSurface.launcher,
+      transport: executionSurface.transport,
       surface: "attached tmux runtime",
       tmuxWorkflowGuidance: "tmux-only workflows are directly usable in this session",
       questionGuidance: "visible renderer available from the current pane",
@@ -661,33 +644,44 @@ function resolveExecutionEnvironment(
   if (leaderPaneHint) {
     const omxBin = resolveOmxCliEntryPath({ cwd }) || process.argv[1] || "omx";
     const bridgeCommand = `OMX_QUESTION_RETURN_PANE=${shellEscapeSingle(leaderPaneHint)} ${shellEscapeSingle(process.execPath)} ${shellEscapeSingle(omxBin)} question`;
+    const isNativeOutsideTmux = executionSurface.launcher === "native";
     return {
       kind: "outside-tmux-with-bridge",
-      surface: "outside tmux with tmux return bridge",
+      launcher: executionSurface.launcher,
+      transport: executionSurface.transport,
+      surface: isNativeOutsideTmux
+        ? "native-hook / Codex App outside tmux with tmux return bridge"
+        : "direct CLI outside tmux with tmux return bridge",
       tmuxWorkflowGuidance: "tmux-only workflows are not directly usable from this surface; launch OMX CLI from an attached tmux shell for `$team` / `omx team`",
       questionGuidance: questionBridgeHint,
-      teamRuntimeInstruction: "This session is outside tmux; `omx team` is a CLI/tmux runtime surface, not directly available here. Launch OMX CLI from an attached tmux shell first; do not replace it with in-process fanout.",
-      teamHelpInstruction: "If you need runtime syntax, run `omx team --help` from an attached tmux OMX CLI shell.",
+      teamRuntimeInstruction: isNativeOutsideTmux
+        ? "This session is native-hook / Codex App outside tmux; `omx team` is a CLI/tmux runtime surface, not directly available here. Launch OMX CLI from an attached tmux shell first; do not replace it with in-process fanout."
+        : "This session is direct CLI outside tmux with a tmux return bridge for `omx question`; prompt-side `$team` does not auto-start the durable tmux team runtime here. If you intentionally want the runtime, run `omx team ...` yourself from shell instead of replacing it with in-process fanout.",
+      teamHelpInstruction: isNativeOutsideTmux
+        ? "If you need runtime syntax, run `omx team --help` from an attached tmux OMX CLI shell."
+        : "If you need runtime syntax, run `omx team --help` yourself from shell.",
       deepInterviewInstruction: `Deep-interview must ask each interview round via \`omx question\`; do not fall back to \`request_user_input\` or plain-text questioning. This session is outside tmux but has a tmux return bridge, so invoke the current-session CLI bridge command: \`${bridgeCommand}\`. When using Bash/background-terminal tool paths, preserve the leader pane by exporting \`OMX_QUESTION_RETURN_PANE=${leaderPaneHint}\` (or equivalent) before invoking \`omx question\`. After starting \`omx question\` in a background terminal, wait for that terminal to finish and read the JSON answer before continuing the interview. Stop remains blocked while a deep-interview question obligation is pending.`,
       leaderPaneHint,
     };
   }
 
-  const isNativeOutsideTmux = looksLikeNativeSession;
+  const isNativeOutsideTmux = executionSurface.launcher === "native" && executionSurface.transport === "outside-tmux";
   const surface = isNativeOutsideTmux
     ? "native-hook / Codex App outside tmux"
     : "direct CLI outside tmux";
   const teamRuntimeInstruction = isNativeOutsideTmux
     ? "This session is native-hook / Codex App outside tmux; `omx team` is a CLI/tmux runtime surface, not directly available here. Launch OMX CLI from an attached tmux shell first; do not replace it with in-process fanout."
-    : "This session is direct CLI outside tmux; `omx team` is a CLI/tmux runtime surface, not directly available here. Move into an attached tmux OMX CLI shell first; do not replace it with in-process fanout.";
+    : "This session is direct CLI outside tmux; prompt-side `$team` does not auto-start the durable tmux team runtime here. If you intentionally want the runtime, run `omx team ...` yourself from shell instead of replacing it with in-process fanout.";
   const teamHelpInstruction = isNativeOutsideTmux
     ? "If you need runtime syntax, run `omx team --help` from an attached tmux OMX CLI shell rather than from Codex App/native outside-tmux context."
-    : "If you need runtime syntax, run `omx team --help` from an attached tmux OMX CLI shell.";
+    : "If you need runtime syntax, run `omx team --help` yourself from shell.";
   const omxBin = resolveOmxCliEntryPath({ cwd }) || process.argv[1] || "omx";
   const fallbackBridgeCommand = `${shellEscapeSingle(process.execPath)} ${shellEscapeSingle(omxBin)} question`;
 
   return {
     kind: isNativeOutsideTmux ? "native-outside-tmux" : "direct-cli-outside-tmux",
+    launcher: executionSurface.launcher,
+    transport: executionSurface.transport,
     surface,
     tmuxWorkflowGuidance: "tmux-only workflows are not directly usable from this surface; launch OMX CLI from an attached tmux shell when you actually need tmux runtime workflows",
     questionGuidance: questionBridgeHint,
@@ -764,6 +758,43 @@ function buildTeamHelpInstruction(cwd: string, payload?: CodexHookPayload): stri
     payload,
     nativeSessionId: safeString(payload?.session_id ?? payload?.sessionId).trim(),
   }).teamHelpInstruction;
+}
+
+function buildNativeOutsideTmuxTeamPromptBlockState(
+  prompt: string,
+  cwd: string,
+  payload: CodexHookPayload,
+  sessionId?: string,
+  threadId?: string,
+  turnId?: string,
+): SkillActiveState | null {
+  const match = detectPrimaryKeyword(prompt);
+  if (match?.skill !== "team") return null;
+
+  const environment = resolveExecutionEnvironment(cwd, {
+    hookEventName: "UserPromptSubmit",
+    payload,
+    canonicalSessionId: sessionId ?? "",
+    nativeSessionId: safeString(payload.session_id ?? payload.sessionId).trim(),
+  });
+  if (!(environment.launcher === "native" && environment.transport === "outside-tmux")) return null;
+
+  const nowIso = new Date().toISOString();
+  return {
+    version: 1,
+    active: false,
+    skill: "team",
+    keyword: match.keyword,
+    phase: "planning",
+    activated_at: nowIso,
+    updated_at: nowIso,
+    source: "keyword-detector",
+    session_id: sessionId,
+    thread_id: threadId,
+    turn_id: turnId,
+    active_skills: [],
+    transition_error: "Codex App/native outside-tmux sessions cannot activate the tmux-only `team` workflow directly. Launch OMX CLI from an attached tmux shell first, then run `omx team ...` there.",
+  };
 }
 
 function buildAdditionalContextMessage(
@@ -1901,7 +1932,14 @@ export async function dispatchCodexNativeHook(
   if (hookEventName === "UserPromptSubmit") {
     const prompt = readPromptText(payload);
     if (prompt) {
-      skillState = await recordSkillActivation({
+      skillState = buildNativeOutsideTmuxTeamPromptBlockState(
+        prompt,
+        cwd,
+        payload,
+        sessionIdForState,
+        threadId || undefined,
+        turnId || undefined,
+      ) ?? await recordSkillActivation({
         stateDir,
         text: prompt,
         sessionId: sessionIdForState,
