@@ -33,6 +33,7 @@ import { sessionCommand } from "./session-search.js";
 import { autoresearchCommand } from "./autoresearch.js";
 import { mcpParityCommand } from "./mcp-parity.js";
 import { adaptCommand } from "./adapt.js";
+import { listCommand } from "./list.js";
 import {
   MADMAX_FLAG,
   CODEX_BYPASS_FLAG,
@@ -158,6 +159,7 @@ Usage:
   omx update    Check npm now, update the global install immediately, then refresh setup
   omx uninstall Remove OMX configuration and clean up installed artifacts
   omx doctor    Check installation health
+  omx list      List packaged OMX skills and native agent prompts (--json)
   omx cleanup   Kill orphaned OMX MCP server processes and remove stale OMX /tmp directories
   omx doctor --team  Check team/swarm runtime health diagnostics
   omx ask       Ask local provider CLI (claude|gemini) and write artifact output
@@ -272,6 +274,7 @@ type CliCommand =
   | "exec"
   | "setup"
   | "update"
+  | "list"
   | "agents"
   | "agents-init"
   | "deepinit"
@@ -309,6 +312,7 @@ const NESTED_HELP_COMMANDS = new Set<CliCommand>([
   "deepinit",
   "exec",
   "hooks",
+  "list",
   "hud",
   "state",
   "wiki",
@@ -598,6 +602,7 @@ export async function main(args: string[]): Promise<void> {
     "exec",
     "setup",
     "update",
+    "list",
     "agents",
     "agents-init",
     "deepinit",
@@ -657,6 +662,9 @@ export async function main(args: string[]): Promise<void> {
         break;
       case "update":
         await runImmediateUpdate(process.cwd());
+        break;
+      case "list":
+        await listCommand(args.slice(1));
         break;
       case "agents":
         await agentsCommand(args.slice(1));
