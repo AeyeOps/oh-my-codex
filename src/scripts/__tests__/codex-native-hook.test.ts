@@ -1743,6 +1743,81 @@ esac
     }
   });
 
+  it("allows Bash omx question when a valid inherited OMX_QUESTION_RETURN_PANE bridge is already exported", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-native-hook-pretool-question-env-allow-"));
+    const originalReturnPane = process.env.OMX_QUESTION_RETURN_PANE;
+    try {
+      process.env.OMX_QUESTION_RETURN_PANE = "%42";
+      const result = await dispatchCodexNativeHook(
+        {
+          hook_event_name: "PreToolUse",
+          cwd,
+          tool_name: "Bash",
+          tool_use_id: "tool-question-env-allow",
+          tool_input: { command: `omx question --json --input '{"question":"Q?","options":["A"],"allow_other":true}'` },
+        },
+        { cwd },
+      );
+
+      assert.equal(result.omxEventName, "pre-tool-use");
+      assert.equal(result.outputJson, null);
+    } finally {
+      if (originalReturnPane === undefined) delete process.env.OMX_QUESTION_RETURN_PANE;
+      else process.env.OMX_QUESTION_RETURN_PANE = originalReturnPane;
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("allows Bash omx question when a valid inherited OMX_LEADER_PANE_ID bridge is already exported", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-native-hook-pretool-question-leader-env-allow-"));
+    const originalLeaderPane = process.env.OMX_LEADER_PANE_ID;
+    try {
+      process.env.OMX_LEADER_PANE_ID = "%43";
+      const result = await dispatchCodexNativeHook(
+        {
+          hook_event_name: "PreToolUse",
+          cwd,
+          tool_name: "Bash",
+          tool_use_id: "tool-question-leader-env-allow",
+          tool_input: { command: `omx question --json --input '{"question":"Q?","options":["A"],"allow_other":true}'` },
+        },
+        { cwd },
+      );
+
+      assert.equal(result.omxEventName, "pre-tool-use");
+      assert.equal(result.outputJson, null);
+    } finally {
+      if (originalLeaderPane === undefined) delete process.env.OMX_LEADER_PANE_ID;
+      else process.env.OMX_LEADER_PANE_ID = originalLeaderPane;
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("still blocks Bash omx question when an inherited OMX_QUESTION_RETURN_PANE value is malformed", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-native-hook-pretool-question-env-malformed-"));
+    const originalReturnPane = process.env.OMX_QUESTION_RETURN_PANE;
+    try {
+      process.env.OMX_QUESTION_RETURN_PANE = "not-a-pane";
+      const result = await dispatchCodexNativeHook(
+        {
+          hook_event_name: "PreToolUse",
+          cwd,
+          tool_name: "Bash",
+          tool_use_id: "tool-question-env-malformed",
+          tool_input: { command: `omx question --json --input '{"question":"Q?","options":["A"],"allow_other":true}'` },
+        },
+        { cwd },
+      );
+
+      assert.equal(result.omxEventName, "pre-tool-use");
+      assert.equal((result.outputJson as { decision?: string } | null)?.decision, "block");
+    } finally {
+      if (originalReturnPane === undefined) delete process.env.OMX_QUESTION_RETURN_PANE;
+      else process.env.OMX_QUESTION_RETURN_PANE = originalReturnPane;
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
   it("blocks Bash node omx.js question when the command does not preserve the leader-pane return hint", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "omx-native-hook-pretool-question-node-block-"));
     try {
@@ -1808,6 +1883,33 @@ esac
       assert.equal(result.omxEventName, "pre-tool-use");
       assert.equal(result.outputJson, null);
     } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("allows native/App Bash omx question when a valid inherited OMX_QUESTION_RETURN_PANE bridge is already exported", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-native-hook-pretool-question-native-env-allow-"));
+    const originalReturnPane = process.env.OMX_QUESTION_RETURN_PANE;
+    try {
+      process.env.OMX_QUESTION_RETURN_PANE = "%42";
+      const result = await dispatchCodexNativeHook(
+        {
+          hook_event_name: "PreToolUse",
+          cwd,
+          source: "codex-app",
+          session_id: "sess-question-native-env-allow",
+          tool_name: "Bash",
+          tool_use_id: "tool-question-native-env-allow",
+          tool_input: { command: `omx question --json --input '{"question":"Q?","options":["A"],"allow_other":true}'` },
+        },
+        { cwd },
+      );
+
+      assert.equal(result.omxEventName, "pre-tool-use");
+      assert.equal(result.outputJson, null);
+    } finally {
+      if (originalReturnPane === undefined) delete process.env.OMX_QUESTION_RETURN_PANE;
+      else process.env.OMX_QUESTION_RETURN_PANE = originalReturnPane;
       await rm(cwd, { recursive: true, force: true });
     }
   });
