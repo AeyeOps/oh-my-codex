@@ -154,6 +154,7 @@ describe("codex native hook config", () => {
       String(preToolUse.hooks?.[0]?.command || ""),
       /codex-native-hook\.js"?$/,
     );
+    assert.equal(preToolUse.hooks?.[0]?.statusMessage, undefined);
 
     const postToolUse = config.hooks.PostToolUse[0] as {
       matcher?: string;
@@ -164,7 +165,18 @@ describe("codex native hook config", () => {
       String(postToolUse.hooks?.[0]?.command || ""),
       /codex-native-hook\.js"?$/,
     );
-    assert.equal(postToolUse.hooks?.[0]?.statusMessage, "Running OMX tool review");
+    assert.equal(postToolUse.hooks?.[0]?.statusMessage, undefined);
+
+    const userPromptSubmit = config.hooks.UserPromptSubmit[0] as {
+      matcher?: string;
+      hooks?: Array<Record<string, unknown>>;
+    };
+    assert.equal(userPromptSubmit.matcher, undefined);
+    assert.match(
+      String(userPromptSubmit.hooks?.[0]?.command || ""),
+      /codex-native-hook\.js"?$/,
+    );
+    assert.equal(userPromptSubmit.hooks?.[0]?.statusMessage, undefined);
 
     const stop = config.hooks.Stop[0] as {
       hooks?: Array<Record<string, unknown>>;
@@ -676,6 +688,35 @@ describe("codex native hook dispatch", () => {
     }
   });
 
+  it("records plugin-prefixed keyword activation from UserPromptSubmit payloads", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-native-hook-plugin-prefixed-"));
+    try {
+      await mkdir(join(cwd, ".omx", "state"), { recursive: true });
+      const result = await dispatchCodexNativeHook(
+        {
+          hook_event_name: "UserPromptSubmit",
+          cwd,
+          session_id: "sess-plugin-1",
+          thread_id: "thread-plugin-1",
+          turn_id: "turn-plugin-1",
+          prompt: "$oh-my-codex:ralplan implement issue #1307",
+        },
+        { cwd },
+      );
+
+      assert.equal(result.omxEventName, "keyword-detector");
+      assert.equal(result.skillState?.skill, "ralplan");
+      const message = String(
+        (result.outputJson as { hookSpecificOutput?: { additionalContext?: string } })?.hookSpecificOutput?.additionalContext || "",
+      );
+      assert.match(message, /\$oh-my-codex:ralplan" -> ralplan/);
+      assert.match(message, /skill: ralplan activated and initial state initialized at \.omx\/state\/sessions\/sess-plugin-1\/ralplan-state\.json; write subsequent updates via omx_state MCP\./);
+      assert.equal(existsSync(join(cwd, ".omx", "state", "sessions", "sess-plugin-1", "ralplan-state.json")), true);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
   it("normalizes the Korean keyboard typo for ulw during UserPromptSubmit activation", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "omx-native-hook-ulw-ko-"));
     try {
@@ -861,6 +902,35 @@ describe("codex native hook dispatch", () => {
     }
   });
 
+  it("clarifies that plugin-prefixed prompt-side $ralph activation does not invoke the PRD-gated CLI path", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-native-hook-plugin-ralph-routing-"));
+    try {
+      await mkdir(join(cwd, ".omx", "state"), { recursive: true });
+      const result = await dispatchCodexNativeHook(
+        {
+          hook_event_name: "UserPromptSubmit",
+          cwd,
+          session_id: "sess-plugin-ralph-msg",
+          thread_id: "thread-plugin-ralph-msg",
+          turn_id: "turn-plugin-ralph-msg",
+          prompt: "$oh-my-codex:ralph continue verification",
+        },
+        { cwd },
+      );
+
+      assert.equal(result.omxEventName, "keyword-detector");
+      assert.equal(result.skillState?.skill, "ralph");
+      const message = String(
+        (result.outputJson as { hookSpecificOutput?: { additionalContext?: string } })?.hookSpecificOutput?.additionalContext || "",
+      );
+      assert.match(message, /\$oh-my-codex:ralph" -> ralph/);
+      assert.match(message, /skill: ralph activated and initial state initialized at \.omx\/state\/sessions\/sess-plugin-ralph-msg\/ralph-state\.json; write subsequent updates via omx_state MCP\./);
+      assert.match(message, /Prompt-side `\$ralph` activation seeds Ralph workflow state only; it does not invoke `omx ralph`\./);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
   it("keeps bare keep-going continuation on the active autopilot skill instead of denying with generic ralph overlap", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "omx-native-hook-autopilot-bare-continuation-"));
     try {
@@ -943,11 +1013,44 @@ describe("codex native hook dispatch", () => {
       assert.match(message, /`omx question` will fail closed here/);
       assert.match(message, /attached tmux OMX CLI session/);
       assert.match(message, /After starting `omx question` in a background terminal, wait for that terminal to finish and read the JSON answer before continuing the interview\./);
-      assert.match(message, /Once a bridge exists, the current-session CLI bridge command is:/);
+      assert.match(message, /If bare `omx question` is unavailable in this reused session, use the current-session CLI bridge command:/);
       assert.doesNotMatch(message, /OMX_QUESTION_RETURN_PANE=/);
       assert.doesNotMatch(message, /preserve the leader pane/i);
       assert.match(message, /Stop remains blocked while a deep-interview question obligation is pending\./);
     } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("emits a PowerShell-aware deep-interview bridge command on Windows", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-native-hook-deep-interview-routing-win32-"));
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
+    try {
+      Object.defineProperty(process, "platform", { value: "win32", configurable: true });
+      const result = await dispatchCodexNativeHook(
+        {
+          hook_event_name: "UserPromptSubmit",
+          cwd,
+          session_id: "sess-deep-interview-msg-win32",
+          thread_id: "thread-deep-interview-msg-win32",
+          turn_id: "turn-deep-interview-msg-win32",
+          prompt: "$deep-interview gather requirements",
+        },
+        { cwd },
+      );
+
+      assert.equal(result.omxEventName, "keyword-detector");
+      assert.equal(result.skillState?.skill, "deep-interview");
+      const message = String(
+        (result.outputJson as { hookSpecificOutput?: { additionalContext?: string } })?.hookSpecificOutput?.additionalContext || "",
+      );
+      assert.match(message, /If bare `omx question` is unavailable in this reused session, use the current-session CLI bridge command:/);
+      assert.match(message, /if \(\$env:TMUX_PANE\) \{ \$env:OMX_QUESTION_RETURN_PANE = \$env:TMUX_PANE \}; & '.+' '.+dist\/cli\/omx\.js' question/);
+      assert.match(message, /When a bridge exists, preserve it in PowerShell\/background-terminal tool paths by setting `\$env:OMX_QUESTION_RETURN_PANE = \$env:TMUX_PANE` \(or a concrete `%pane` value\) before invoking `omx question`\./);
+      assert.doesNotMatch(message, /OMX_QUESTION_RETURN_PANE='/);
+      assert.doesNotMatch(message, /exporting `OMX_QUESTION_RETURN_PANE=/i);
+    } finally {
+      if (originalPlatform) Object.defineProperty(process, "platform", originalPlatform);
       await rm(cwd, { recursive: true, force: true });
     }
   });
@@ -991,6 +1094,50 @@ describe("codex native hook dispatch", () => {
       assert.match(message, /preserve the leader pane/i);
       assert.match(message, /OMX_QUESTION_RETURN_PANE=%77/);
     } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("uses PowerShell leader-pane assignment guidance on Windows when a pane hint is available", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-native-hook-deep-interview-pane-hint-win32-"));
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
+    try {
+      Object.defineProperty(process, "platform", { value: "win32", configurable: true });
+      const sessionId = "sess-deep-interview-pane-hint-win32";
+      const sessionDir = join(cwd, ".omx", "state", "sessions", sessionId);
+      await mkdir(sessionDir, { recursive: true });
+      await writeJson(join(sessionDir, "deep-interview-state.json"), {
+        active: true,
+        mode: "deep-interview",
+        current_phase: "intent-first",
+        started_at: "2026-04-21T10:00:00.000Z",
+        updated_at: "2026-04-21T10:00:00.000Z",
+        tmux_pane_id: "%77",
+      });
+
+      const result = await dispatchCodexNativeHook(
+        {
+          hook_event_name: "UserPromptSubmit",
+          cwd,
+          session_id: sessionId,
+          thread_id: "thread-deep-interview-pane-hint-win32",
+          turn_id: "turn-deep-interview-pane-hint-win32",
+          prompt: "$deep-interview gather requirements",
+        },
+        { cwd },
+      );
+
+      assert.equal(result.omxEventName, "keyword-detector");
+      assert.equal(result.skillState?.skill, "deep-interview");
+      const message = String(
+        (result.outputJson as { hookSpecificOutput?: { additionalContext?: string } })?.hookSpecificOutput?.additionalContext || "",
+      );
+      assert.match(message, /\$env:OMX_QUESTION_RETURN_PANE = '%77'; & '.+' '.+dist\/cli\/omx\.js' question/);
+      assert.match(message, /When using PowerShell\/background-terminal tool paths, preserve the leader pane by setting `\$env:OMX_QUESTION_RETURN_PANE = '%77'` before invoking `omx question`\./);
+      assert.doesNotMatch(message, /OMX_QUESTION_RETURN_PANE='%77'/);
+      assert.doesNotMatch(message, /exporting `OMX_QUESTION_RETURN_PANE=%77`/i);
+    } finally {
+      if (originalPlatform) Object.defineProperty(process, "platform", originalPlatform);
       await rm(cwd, { recursive: true, force: true });
     }
   });
@@ -1150,6 +1297,31 @@ export async function onHookEvent(event) {
           thread_id: "thread-unknown-1",
           turn_id: "turn-unknown-1",
           prompt: "$maer-thinking 다시 설명해봐",
+        },
+        { cwd },
+      );
+
+      assert.equal(result.omxEventName, "keyword-detector");
+      assert.equal(result.skillState, null);
+      assert.equal(result.outputJson, null);
+      assert.equal(existsSync(join(cwd, ".omx", "state", "skill-active-state.json")), false);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("does not emit UserPromptSubmit routing context for unknown plugin-prefixed $tokens", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-native-hook-unknown-plugin-token-"));
+    try {
+      await mkdir(join(cwd, ".omx", "state"), { recursive: true });
+      const result = await dispatchCodexNativeHook(
+        {
+          hook_event_name: "UserPromptSubmit",
+          cwd,
+          session_id: "sess-unknown-plugin-1",
+          thread_id: "thread-unknown-plugin-1",
+          turn_id: "turn-unknown-plugin-1",
+          prompt: "$oh-my-codex:maer-thinking 다시 설명해봐",
         },
         { cwd },
       );
@@ -1396,6 +1568,37 @@ export async function onHookEvent(event) {
       assert.match(message, /planning preserved over simultaneous execution follow-up; deferred skills: team, ralph\./);
       assert.match(message, /skill: ralplan activated and initial state initialized at \.omx\/state\/sessions\/sess-multi-1\/ralplan-state\.json; write subsequent updates via omx_state MCP\./);
       assert.doesNotMatch(message, /Use the durable OMX team runtime via `omx team \.\.\.`/);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps the planning skill active for mixed plugin-prefixed and bare workflow invocations together", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-native-hook-plugin-planning-precedence-"));
+    try {
+      await mkdir(join(cwd, ".omx", "state"), { recursive: true });
+
+      const result = await dispatchCodexNativeHook(
+        {
+          hook_event_name: "UserPromptSubmit",
+          cwd,
+          session_id: "sess-plugin-multi-1",
+          thread_id: "thread-plugin-multi-1",
+          turn_id: "turn-plugin-multi-1",
+          prompt: "$oh-my-codex:ralplan $team $oh-my-codex:ralph ship this fix",
+        },
+        { cwd },
+      );
+
+      const message = String(
+        (result.outputJson as { hookSpecificOutput?: { additionalContext?: string } })?.hookSpecificOutput?.additionalContext || '',
+      );
+      assert.match(message, /\$oh-my-codex:ralplan" -> ralplan/);
+      assert.match(message, /\$team" -> team/);
+      assert.match(message, /\$oh-my-codex:ralph" -> ralph/);
+      assert.doesNotMatch(message, /mode transiting:/);
+      assert.match(message, /planning preserved over simultaneous execution follow-up; deferred skills: team, ralph\./);
+      assert.match(message, /skill: ralplan activated and initial state initialized at \.omx\/state\/sessions\/sess-plugin-multi-1\/ralplan-state\.json; write subsequent updates via omx_state MCP\./);
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }
