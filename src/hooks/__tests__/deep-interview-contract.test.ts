@@ -173,6 +173,10 @@ describe("deep-interview Ouroboros contract", () => {
 		);
 		assert.match(
 			deepInterviewSkill,
+			/native Windows interactive sessions without tmux.*inline in the current terminal/i,
+		);
+		assert.match(
+			deepInterviewSkill,
 			/wait for that background terminal to finish and read its JSON answer before scoring ambiguity, asking another round, or handing off/i,
 		);
 	});
@@ -340,6 +344,7 @@ describe("cross-skill and AGENTS coherence for deep-interview", () => {
 
 	it("makes template AGENTS explicit about omx question for deep-interview", () => {
 		assert.match(templateAgents, /deep-interview is active.*`omx question`/i);
+		assert.match(templateAgents, /if `omx question` renders inline in the current terminal.*interactive native Windows session without tmux/i);
 		assert.match(templateAgents, /after launching `omx question` in a background terminal, wait for that terminal to finish and read the JSON answer before continuing/i);
 		assert.match(templateAgents, /do not substitute `request_user_input` or ad hoc plain-text questioning/i);
 	});
