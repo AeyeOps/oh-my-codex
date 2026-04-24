@@ -3,8 +3,10 @@ import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { setup } from "../setup.js";
+
+const packageRoot = process.cwd();
 
 async function withTempCwd(wd: string, fn: () => Promise<void>): Promise<void> {
   const previousCwd = process.cwd();
@@ -40,7 +42,7 @@ async function withIsolatedUserHome<T>(
   }
 }
 
-async function seedPluginCacheFromInstalledSkills(
+async function seedPluginCacheFromCanonicalSkills(
   codexHomeDir: string,
 ): Promise<void> {
   const artifactPath = join(
@@ -50,10 +52,15 @@ async function seedPluginCacheFromInstalledSkills(
     "local-marketplace",
     "oh-my-codex",
     "local",
-    "skills",
   );
-  await mkdir(dirname(artifactPath), { recursive: true });
-  await cp(join(codexHomeDir, "skills"), artifactPath, { recursive: true });
+  await mkdir(artifactPath, { recursive: true });
+  await cp(
+    join(packageRoot, "plugins", "oh-my-codex", "skills"),
+    join(artifactPath, "skills"),
+    {
+      recursive: true,
+    },
+  );
 }
 
 describe("omx setup install mode behavior", () => {
@@ -70,12 +77,16 @@ describe("omx setup install mode behavior", () => {
         await readFile(join(wd, ".omx", "setup-scope.json"), "utf-8"),
       ) as { scope: string; installMode?: string };
       assert.deepEqual(persisted, { scope: "user", installMode: "plugin" });
+      assert.equal(
+        existsSync(join(wd, "home", ".codex", "skills", "help", "SKILL.md")),
+        true,
+      );
     } finally {
       await rm(wd, { recursive: true, force: true });
     }
   });
 
-  it("defaults to plugin mode when an installed oh-my-codex plugin cache is discovered", async () => {
+  it("defaults to plugin mode and falls back to legacy skills when the discovered plugin cache lacks a skill mirror", async () => {
     const wd = await mkdtemp(join(tmpdir(), "omx-setup-install-mode-"));
     try {
       await withIsolatedUserHome(wd, async (codexHomeDir) => {
@@ -101,7 +112,7 @@ describe("omx setup install mode behavior", () => {
           assert.deepEqual(persisted, { scope: "user", installMode: "plugin" });
           assert.equal(
             existsSync(join(codexHomeDir, "skills", "help", "SKILL.md")),
-            false,
+            true,
           );
           const hooks = await readFile(
             join(codexHomeDir, "hooks.json"),
@@ -162,7 +173,7 @@ describe("omx setup install mode behavior", () => {
           );
           assert.equal(
             existsSync(join(codexHomeDir, "skills", "help", "SKILL.md")),
-            false,
+            true,
           );
           assert.equal(
             existsSync(join(codexHomeDir, "agents", "planner.toml")),
@@ -199,7 +210,7 @@ describe("omx setup install mode behavior", () => {
           assert.match(hooks, /codex-native-hook\.js/);
           assert.equal(
             existsSync(join(codexHomeDir, "skills", "help", "SKILL.md")),
-            false,
+            true,
           );
           assert.equal(
             existsSync(join(codexHomeDir, "agents", "planner.toml")),
@@ -319,7 +330,7 @@ describe("omx setup install mode behavior", () => {
     }
   });
 
-  it("installs project-scoped native hooks when plugin mode is explicitly requested", async () => {
+  it("installs project-scoped native hooks and fallback skills when plugin mode is explicitly requested without a ready plugin cache", async () => {
     const wd = await mkdtemp(join(tmpdir(), "omx-setup-install-mode-"));
     try {
       await withTempCwd(wd, async () => {
@@ -338,7 +349,7 @@ describe("omx setup install mode behavior", () => {
         );
         assert.equal(
           existsSync(join(wd, ".codex", "skills", "help", "SKILL.md")),
-          false,
+          true,
         );
         assert.equal(
           existsSync(join(wd, ".codex", "agents", "planner.toml")),
@@ -362,7 +373,7 @@ describe("omx setup install mode behavior", () => {
     }
   });
 
-  it("removes legacy user components when plugin mode is selected", async () => {
+  it("preserves legacy user skills until plugin readiness is proven while removing other legacy components", async () => {
     const wd = await mkdtemp(join(tmpdir(), "omx-setup-install-mode-"));
     try {
       await withIsolatedUserHome(wd, async (codexHomeDir) => {
@@ -389,7 +400,7 @@ describe("omx setup install mode behavior", () => {
 
           await setup({ scope: "user", installMode: "plugin" });
 
-          assert.equal(existsSync(helpSkillPath), false);
+          assert.equal(existsSync(helpSkillPath), true);
           assert.equal(existsSync(promptPath), false);
           assert.equal(existsSync(agentPath), false);
           assert.equal(existsSync(hooksPath), true);
@@ -415,7 +426,7 @@ describe("omx setup install mode behavior", () => {
       await withIsolatedUserHome(wd, async (codexHomeDir) => {
         await withTempCwd(wd, async () => {
           await setup({ scope: "user", installMode: "legacy" });
-          await seedPluginCacheFromInstalledSkills(codexHomeDir);
+          await seedPluginCacheFromCanonicalSkills(codexHomeDir);
 
           const helpSkillDir = join(codexHomeDir, "skills", "help");
           const wikiSkillDir = join(codexHomeDir, "skills", "wiki");
@@ -433,13 +444,105 @@ describe("omx setup install mode behavior", () => {
     }
   });
 
+  it("keeps legacy user skills when plugin cache has stale skill contents", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-setup-install-mode-"));
+    try {
+      await withIsolatedUserHome(wd, async (codexHomeDir) => {
+        await withTempCwd(wd, async () => {
+          await setup({ scope: "user", installMode: "legacy" });
+          await seedPluginCacheFromCanonicalSkills(codexHomeDir);
+
+          const cachedHelpPath = join(
+            codexHomeDir,
+            "plugins",
+            "cache",
+            "local-marketplace",
+            "oh-my-codex",
+            "local",
+            "skills",
+            "help",
+            "SKILL.md",
+          );
+          await writeFile(cachedHelpPath, "# stale plugin help\n");
+
+          const helpSkillDir = join(codexHomeDir, "skills", "help");
+          await setup({ scope: "user", installMode: "plugin" });
+
+          assert.equal(existsSync(helpSkillDir), true);
+        });
+      });
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps legacy user skills when plugin cache has extra stale skill directories", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-setup-install-mode-"));
+    try {
+      await withIsolatedUserHome(wd, async (codexHomeDir) => {
+        await withTempCwd(wd, async () => {
+          await setup({ scope: "user", installMode: "legacy" });
+          await seedPluginCacheFromCanonicalSkills(codexHomeDir);
+
+          await mkdir(
+            join(
+              codexHomeDir,
+              "plugins",
+              "cache",
+              "local-marketplace",
+              "oh-my-codex",
+              "local",
+              "skills",
+              "stale-extra-skill",
+            ),
+            { recursive: true },
+          );
+
+          const helpSkillDir = join(codexHomeDir, "skills", "help");
+          await setup({ scope: "user", installMode: "plugin" });
+
+          assert.equal(existsSync(helpSkillDir), true);
+        });
+      });
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("preserves legacy user skills with local non-SKILL files during plugin cleanup", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-setup-install-mode-"));
+    try {
+      await withIsolatedUserHome(wd, async (codexHomeDir) => {
+        await withTempCwd(wd, async () => {
+          await setup({ scope: "user", installMode: "legacy" });
+          await seedPluginCacheFromCanonicalSkills(codexHomeDir);
+
+          const helpSkillDir = join(codexHomeDir, "skills", "help");
+          const localNotesPath = join(helpSkillDir, "LOCAL_NOTES.md");
+          const wikiSkillDir = join(codexHomeDir, "skills", "wiki");
+          await writeFile(localNotesPath, "local customization\n");
+
+          await setup({ scope: "user", installMode: "plugin" });
+
+          assert.equal(
+            await readFile(localNotesPath, "utf-8"),
+            "local customization\n",
+          );
+          assert.equal(existsSync(wikiSkillDir), false);
+        });
+      });
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
   it("preserves customized legacy user skills during plugin cleanup", async () => {
     const wd = await mkdtemp(join(tmpdir(), "omx-setup-install-mode-"));
     try {
       await withIsolatedUserHome(wd, async (codexHomeDir) => {
         await withTempCwd(wd, async () => {
           await setup({ scope: "user", installMode: "legacy" });
-          await seedPluginCacheFromInstalledSkills(codexHomeDir);
+          await seedPluginCacheFromCanonicalSkills(codexHomeDir);
 
           const helpSkillPath = join(
             codexHomeDir,
