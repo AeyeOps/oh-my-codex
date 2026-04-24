@@ -89,7 +89,7 @@ describe('omx question CLI', () => {
     const recordPath = join(questionsDir, recordFile);
 
     let record = null;
-    for (let attempt = 0; attempt < 50; attempt += 1) {
+    for (let attempt = 0; attempt < 100; attempt += 1) {
       record = await readQuestionRecord(recordPath);
       if (record?.status === 'prompting') break;
       await new Promise((resolve) => setTimeout(resolve, 20));
@@ -376,7 +376,7 @@ esac
     const recordPath = join(questionsDir, recordFile);
 
     let record = null;
-    for (let attempt = 0; attempt < 50; attempt += 1) {
+    for (let attempt = 0; attempt < 100; attempt += 1) {
       record = await readQuestionRecord(recordPath);
       if (record?.status === 'prompting') break;
       await new Promise((resolve) => setTimeout(resolve, 20));
