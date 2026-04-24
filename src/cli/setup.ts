@@ -5,6 +5,7 @@
 
 import {
   mkdir,
+  cp,
   copyFile,
   readdir,
   readFile,
@@ -48,6 +49,14 @@ import { getPackageRoot } from "../utils/package.js";
 import { readSessionState, isSessionStale } from "../hooks/session.js";
 import { getCatalogHeadlineCounts } from "./catalog-contract.js";
 import { tryReadCatalogManifest } from "../catalog/reader.js";
+import {
+  getSetupInstallableSkillNames,
+  isCatalogInstallableStatus,
+} from "../catalog/installable.js";
+import {
+  compareDirectoryMirror,
+  compareSkillMirror,
+} from "../catalog/skill-mirror.js";
 import { DEFAULT_FRONTIER_MODEL } from "../config/models.js";
 import {
   addGeneratedAgentsMarker,
@@ -64,9 +73,13 @@ interface SetupOptions {
   codexVersionProbe?: () => string | null;
   force?: boolean;
   dryRun?: boolean;
+  installMode?: SetupInstallMode;
   scope?: SetupScope;
   verbose?: boolean;
   agentsOverwritePrompt?: (destinationPath: string) => Promise<boolean>;
+  installModePrompt?: (
+    defaultMode: SetupInstallMode,
+  ) => Promise<SetupInstallMode>;
   modelUpgradePrompt?: (
     currentModel: string,
     targetModel: string,
@@ -85,6 +98,8 @@ const LEGACY_SCOPE_MIGRATION: Record<string, "project"> = {
 
 export const SETUP_SCOPES = ["user", "project"] as const;
 export type SetupScope = (typeof SETUP_SCOPES)[number];
+export const SETUP_INSTALL_MODES = ["legacy", "plugin"] as const;
+export type SetupInstallMode = (typeof SETUP_INSTALL_MODES)[number];
 
 export interface ScopeDirectories {
   codexConfigFile: string;
@@ -144,8 +159,6 @@ const PROJECT_GITIGNORE_ENTRIES = [
   "!.codex/prompts/**",
 ] as const;
 const LEGACY_PROJECT_GITIGNORE_ENTRIES = [".codex/"] as const;
-const SETUP_ONLY_INSTALLABLE_SKILLS = new Set(["wiki"]);
-
 function applyScopePathRewritesToAgentsTemplate(
   content: string,
   scope: SetupScope,
@@ -156,10 +169,16 @@ function applyScopePathRewritesToAgentsTemplate(
 
 interface PersistedSetupScope {
   scope: SetupScope;
+  installMode?: SetupInstallMode;
 }
 
 interface ResolvedSetupScope {
   scope: SetupScope;
+  source: "cli" | "persisted" | "prompt" | "default";
+}
+
+interface ResolvedSetupInstallMode {
+  installMode: SetupInstallMode;
   source: "cli" | "persisted" | "prompt" | "default";
 }
 
@@ -170,6 +189,7 @@ const REQUIRED_TEAM_CLI_API_MARKERS = [
 ] as const;
 
 const DEFAULT_SETUP_SCOPE: SetupScope = "user";
+const DEFAULT_SETUP_INSTALL_MODE: SetupInstallMode = "legacy";
 const LEGACY_SETUP_MODEL = "gpt-5.3-codex";
 const DEFAULT_SETUP_MODEL = DEFAULT_FRONTIER_MODEL;
 const OBSOLETE_NATIVE_AGENT_FIELD = ["skill", "ref"].join("_");
@@ -418,6 +438,100 @@ async function buildLegacySkillOverlapNotice(
   };
 }
 
+function getPluginCacheRoot(codexHomeDir: string): string {
+  return join(codexHomeDir, "plugins", "cache");
+}
+
+async function listPluginInstallArtifactPaths(
+  codexHomeDir: string,
+): Promise<string[]> {
+  const cacheRoot = getPluginCacheRoot(codexHomeDir);
+  if (!existsSync(cacheRoot)) return [];
+
+  const marketplaceEntries = await readdir(cacheRoot, {
+    withFileTypes: true,
+  }).catch(() => []);
+  const discoveredPaths: string[] = [];
+
+  for (const marketplaceEntry of marketplaceEntries) {
+    if (!marketplaceEntry.isDirectory()) continue;
+    const pluginRoot = join(cacheRoot, marketplaceEntry.name, "oh-my-codex");
+    if (!existsSync(pluginRoot)) continue;
+    const versionEntries = await readdir(pluginRoot, {
+      withFileTypes: true,
+    }).catch(() => []);
+    for (const versionEntry of versionEntries) {
+      if (!versionEntry.isDirectory()) continue;
+      discoveredPaths.push(join(pluginRoot, versionEntry.name));
+    }
+  }
+
+  return discoveredPaths.sort();
+}
+
+async function pluginInstallArtifactHasExpectedSkillMirror(
+  artifactPath: string,
+  packageRoot: string,
+): Promise<boolean> {
+  const skillsDir = join(artifactPath, "skills");
+  const manifest = tryReadCatalogManifest(packageRoot);
+  const installableSkillNames = [...getSetupInstallableSkillNames(manifest)].sort();
+  return (await compareSkillMirror(
+    join(packageRoot, "skills"),
+    skillsDir,
+    installableSkillNames,
+  )) === null;
+}
+
+interface PluginReadinessResult {
+  ready: boolean;
+  evidencePaths: string[];
+  message: string;
+}
+
+async function detectUserVisiblePluginReadiness(
+  codexHomeDir: string,
+  packageRoot: string,
+): Promise<PluginReadinessResult> {
+  const artifactPaths = await listPluginInstallArtifactPaths(codexHomeDir);
+  const validArtifacts: string[] = [];
+
+  for (const artifactPath of artifactPaths) {
+    if (await pluginInstallArtifactHasExpectedSkillMirror(artifactPath, packageRoot)) {
+      validArtifacts.push(artifactPath);
+    }
+  }
+
+  if (validArtifacts.length > 0) {
+    return {
+      ready: true,
+      evidencePaths: validArtifacts,
+      message:
+        `Plugin discovery artifacts found in ${getPluginCacheRoot(codexHomeDir)} and exact skill mirror readiness verified.`,
+    };
+  }
+
+  return {
+    ready: false,
+    evidencePaths: artifactPaths,
+    message:
+      `No user-visible oh-my-codex plugin discovery artifact with an exact skill mirror was found under ${getPluginCacheRoot(codexHomeDir)}.`,
+  };
+}
+
+async function hasAnySetupInstallableSkill(
+  packageRoot: string,
+  skillsDir: string,
+): Promise<boolean> {
+  const installableSkillNames = getSetupInstallableSkillNames(
+    tryReadCatalogManifest(packageRoot),
+  );
+  for (const skillName of installableSkillNames) {
+    if (existsSync(join(skillsDir, skillName, "SKILL.md"))) return true;
+  }
+  return false;
+}
+
 function logCategorySummary(name: string, summary: SetupCategorySummary): void {
   console.log(
     `  ${name}: updated=${summary.updated}, unchanged=${summary.unchanged}, ` +
@@ -430,6 +544,10 @@ function isSetupScope(value: string): value is SetupScope {
 }
 function getScopeFilePath(projectRoot: string): string {
   return join(projectRoot, ".omx", "setup-scope.json");
+}
+
+function isSetupInstallMode(value: string): value is SetupInstallMode {
+  return SETUP_INSTALL_MODES.includes(value as SetupInstallMode);
 }
 
 export function resolveScopeDirectories(
@@ -481,6 +599,11 @@ async function readPersistedSetupPreferences(
         persisted.scope = migrated;
       }
     }
+    if (parsed && typeof parsed.installMode === "string") {
+      if (isSetupInstallMode(parsed.installMode)) {
+        persisted.installMode = parsed.installMode;
+      }
+    }
     return Object.keys(persisted).length > 0 ? persisted : undefined;
   } catch {
     // ignore invalid persisted scope and fall back to prompt/default
@@ -501,7 +624,7 @@ async function promptForSetupScope(
   try {
     console.log("Select setup scope:");
     console.log(
-      `  1) user (default) — installs to ~/.codex (skills default to ~/.codex/skills)`,
+      `  1) user (default) — installs to ${codexHome()} (skills default to ${userSkillsDir()})`,
     );
     console.log("  2) project — installs to ./.codex (local to project)");
     const answer = (await rl.question("Scope [1-2] (default: 1): "))
@@ -509,6 +632,34 @@ async function promptForSetupScope(
       .toLowerCase();
     if (answer === "2" || answer === "project") return "project";
     return defaultScope;
+  } finally {
+    rl.close();
+  }
+}
+
+async function promptForSetupInstallMode(
+  defaultMode: SetupInstallMode,
+): Promise<SetupInstallMode> {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    return defaultMode;
+  }
+  const rl = createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+  try {
+    console.log("Select user-scope skill delivery mode:");
+    console.log(
+      "  1) legacy (default) — install/update OMX skills in the resolved user skill root",
+    );
+    console.log(
+      "  2) plugin — rely on Codex plugin skill discovery and clean up matching legacy OMX-managed user skills when plugin readiness is proven",
+    );
+    const answer = (await rl.question("Install mode [1-2] (default: 1): "))
+      .trim()
+      .toLowerCase();
+    if (answer === "2" || answer === "plugin") return "plugin";
+    return defaultMode;
   } finally {
     rl.close();
   }
@@ -613,11 +764,56 @@ async function resolveSetupScope(
   return { scope: DEFAULT_SETUP_SCOPE, source: "default" };
 }
 
+async function resolveSetupInstallMode(
+  projectRoot: string,
+  scope: SetupScope,
+  requestedInstallMode?: SetupInstallMode,
+  installModePrompt?: (defaultMode: SetupInstallMode) => Promise<SetupInstallMode>,
+): Promise<ResolvedSetupInstallMode | null> {
+  if (scope !== "user") return null;
+  if (requestedInstallMode) {
+    return { installMode: requestedInstallMode, source: "cli" };
+  }
+
+  const persisted = await readPersistedSetupPreferences(projectRoot);
+  if (persisted?.installMode) {
+    return { installMode: persisted.installMode, source: "persisted" };
+  }
+
+  if (process.stdin.isTTY && process.stdout.isTTY) {
+    const installMode = installModePrompt
+      ? await installModePrompt(DEFAULT_SETUP_INSTALL_MODE)
+      : await promptForSetupInstallMode(DEFAULT_SETUP_INSTALL_MODE);
+    return { installMode, source: "prompt" };
+  }
+
+  return { installMode: DEFAULT_SETUP_INSTALL_MODE, source: "default" };
+}
+
 function hasGitignoreEntry(content: string, entry: string): boolean {
   return content
     .split(/\r?\n/)
     .map((line) => line.trim())
     .some((line) => line === entry);
+}
+
+function isProjectPathIgnoredByGit(projectRoot: string, path: string): boolean {
+  const result = spawnSync("git", ["check-ignore", "--no-index", "-q", path], {
+    cwd: projectRoot,
+    stdio: "ignore",
+    windowsHide: true,
+  });
+  return result.status === 0;
+}
+
+function shouldAddProjectGitignoreEntry(projectRoot: string, content: string, entry: string): boolean {
+  if (hasGitignoreEntry(content, entry)) return false;
+
+  if (entry === ".omx/" && isProjectPathIgnoredByGit(projectRoot, entry)) {
+    return false;
+  }
+
+  return true;
 }
 
 function stripLegacyGitignoreEntries(
@@ -650,8 +846,8 @@ async function ensureProjectGitignore(
     LEGACY_PROJECT_GITIGNORE_ENTRIES,
   );
 
-  const missingEntries = PROJECT_GITIGNORE_ENTRIES.filter(
-    (entry) => !hasGitignoreEntry(normalized.content, entry),
+  const missingEntries = PROJECT_GITIGNORE_ENTRIES.filter((entry) =>
+    shouldAddProjectGitignoreEntry(projectRoot, normalized.content, entry),
   );
 
   if (missingEntries.length === 0 && !normalized.removed) {
@@ -660,7 +856,7 @@ async function ensureProjectGitignore(
 
   const nextContent = destinationExists
     ? `${normalized.content}${normalized.content.endsWith("\n") || normalized.content.length === 0 ? "" : "\n"}${missingEntries.join("\n")}${missingEntries.length > 0 ? "\n" : ""}`
-    : `${PROJECT_GITIGNORE_ENTRIES.join("\n")}\n`;
+    : `${missingEntries.join("\n")}\n`;
 
   if (
     await ensureBackup(gitignorePath, destinationExists, backupContext, options)
@@ -687,9 +883,9 @@ async function ensureProjectGitignore(
   return destinationExists ? "updated" : "created";
 }
 
-async function persistSetupScope(
+async function persistSetupPreferences(
   projectRoot: string,
-  scope: SetupScope,
+  preferences: PersistedSetupScope,
   options: Pick<SetupOptions, "dryRun" | "verbose">,
 ): Promise<void> {
   const scopePath = getScopeFilePath(projectRoot);
@@ -698,8 +894,7 @@ async function persistSetupScope(
     return;
   }
   await mkdir(dirname(scopePath), { recursive: true });
-  const payload: PersistedSetupScope = { scope };
-  await writeFile(scopePath, JSON.stringify(payload, null, 2) + "\n");
+  await writeFile(scopePath, JSON.stringify(preferences, null, 2) + "\n");
   if (options.verbose) console.log(`  Wrote ${scopePath}`);
 }
 
@@ -707,14 +902,23 @@ export async function setup(options: SetupOptions = {}): Promise<void> {
   const {
     force = false,
     dryRun = false,
+    installMode: requestedInstallMode,
     scope: requestedScope,
     verbose = false,
+    installModePrompt,
     modelUpgradePrompt,
   } = options;
   const pkgRoot = getPackageRoot();
   const projectRoot = process.cwd();
   const resolvedScope = await resolveSetupScope(projectRoot, requestedScope);
+  const resolvedInstallMode = await resolveSetupInstallMode(
+    projectRoot,
+    resolvedScope.scope,
+    requestedInstallMode,
+    installModePrompt,
+  );
   const scopeDirs = resolveScopeDirectories(resolvedScope.scope, projectRoot);
+  const persistedPreferences = await readPersistedSetupPreferences(projectRoot);
   const scopeSourceMessage =
     resolvedScope.source === "persisted" ? " (from .omx/setup-scope.json)" : "";
   const backupContext = getBackupContext(resolvedScope.scope, projectRoot);
@@ -724,6 +928,15 @@ export async function setup(options: SetupOptions = {}): Promise<void> {
   console.log(
     `Using setup scope: ${resolvedScope.scope}${scopeSourceMessage}\n`,
   );
+  if (resolvedInstallMode) {
+    const installModeSourceMessage =
+      resolvedInstallMode.source === "persisted"
+        ? " (from .omx/setup-scope.json)"
+        : "";
+    console.log(
+      `Using user-scope skill delivery mode: ${resolvedInstallMode.installMode}${installModeSourceMessage}\n`,
+    );
+  }
 
   // Step 1: Ensure directories exist
   console.log("[1/8] Creating directories...");
@@ -742,10 +955,22 @@ export async function setup(options: SetupOptions = {}): Promise<void> {
     }
     if (verbose) console.log(`  mkdir ${dir}`);
   }
-  await persistSetupScope(projectRoot, resolvedScope.scope, {
-    dryRun,
-    verbose,
-  });
+  await persistSetupPreferences(
+    projectRoot,
+    resolvedInstallMode
+      ? {
+          scope: resolvedScope.scope,
+          installMode: resolvedInstallMode.installMode,
+        }
+      : {
+          ...persistedPreferences,
+          scope: resolvedScope.scope,
+        },
+    {
+      dryRun,
+      verbose,
+    },
+  );
   console.log("  Done.\n");
 
   if (resolvedScope.scope === "project") {
@@ -813,11 +1038,66 @@ export async function setup(options: SetupOptions = {}): Promise<void> {
   {
     const skillsSrc = join(pkgRoot, "skills");
     const skillsDst = scopeDirs.skillsDir;
-    summary.skills = await installSkills(skillsSrc, skillsDst, backupContext, {
-      force,
-      dryRun,
-      verbose,
-    });
+    if (
+      resolvedScope.scope === "user" &&
+      resolvedInstallMode?.installMode === "plugin"
+    ) {
+      summary.skills = createEmptyCategorySummary();
+      const pluginReadiness = await detectUserVisiblePluginReadiness(
+        scopeDirs.codexHomeDir,
+        pkgRoot,
+      );
+      if (!pluginReadiness.ready) {
+        console.log(`  warning: ${pluginReadiness.message}`);
+        if (await hasAnySetupInstallableSkill(pkgRoot, skillsDst)) {
+          summary.skills.skipped += 1;
+          console.log(
+            `  Legacy OMX skills under ${scopeDirs.skillsDir} were left in place because plugin readiness is not established.`,
+          );
+        } else {
+          console.log(
+            "  No legacy OMX skills were present, so plugin mode is falling back to legacy skill installation for this setup run.",
+          );
+          summary.skills = await installSkills(skillsSrc, skillsDst, backupContext, {
+            force,
+            dryRun,
+            verbose,
+          });
+        }
+      } else {
+        if (verbose) {
+          for (const evidencePath of pluginReadiness.evidencePaths) {
+            console.log(`  plugin readiness: ${evidencePath}`);
+          }
+        }
+        const cleanup = await cleanupLegacyManagedUserSkills(
+          skillsSrc,
+          skillsDst,
+          backupContext,
+          { dryRun, verbose },
+        );
+        summary.skills.removed += cleanup.removedSkillNames.length;
+        summary.skills.skipped += cleanup.skippedSkillNames.length;
+        for (const warning of cleanup.warnings) {
+          console.log(`  warning: ${warning}`);
+        }
+        if (cleanup.removedSkillNames.length > 0) {
+          console.log(
+            `  ${dryRun ? "Would remove" : "Removed"} ${cleanup.removedSkillNames.length} legacy OMX-managed user skill director${cleanup.removedSkillNames.length === 1 ? "y" : "ies"} after plugin readiness verification.`,
+          );
+        } else {
+          console.log(
+            "  Plugin mode detected no removable legacy OMX-managed user skill directories.",
+          );
+        }
+      }
+    } else {
+      summary.skills = await installSkills(skillsSrc, skillsDst, backupContext, {
+        force,
+        dryRun,
+        verbose,
+      });
+    }
     if (catalogCounts) {
       console.log(
         `  Skill refresh complete (catalog baseline: ${catalogCounts.skills}).\n`,
@@ -1314,8 +1594,6 @@ async function installPrompts(
   const agentStatusByName = manifest
     ? new Map(manifest.agents.map((agent) => [agent.name, agent.status]))
     : null;
-  const isInstallableStatus = (status: string | undefined): boolean =>
-    status === "active" || status === "internal";
 
   const files = await readdir(srcDir);
   const staleCandidatePromptNames = new Set(
@@ -1328,7 +1606,7 @@ async function installPrompts(
     staleCandidatePromptNames.add(promptName);
 
     const status = agentStatusByName?.get(promptName);
-    if (agentStatusByName && !isInstallableStatus(status)) {
+    if (agentStatusByName && !isCatalogInstallableStatus(status)) {
       summary.skipped += 1;
       if (options.verbose) {
         const label = status ?? "unlisted";
@@ -1357,7 +1635,7 @@ async function installPrompts(
       if (!file.endsWith(".md")) continue;
       const promptName = file.slice(0, -3);
       const status = agentStatusByName?.get(promptName);
-      if (isInstallableStatus(status)) continue;
+      if (isCatalogInstallableStatus(status)) continue;
       if (!staleCandidatePromptNames.has(promptName) && status === undefined)
         continue;
 
@@ -1397,8 +1675,6 @@ async function refreshNativeAgentConfigs(
   const agentStatusByName = manifest
     ? new Map(manifest.agents.map((agent) => [agent.name, agent.status]))
     : null;
-  const isInstallableStatus = (status: string | undefined): boolean =>
-    status === "active" || status === "internal";
   const staleCandidateNativeAgentNames = new Set(
     manifest?.agents.map((agent) => agent.name) ?? [],
   );
@@ -1406,7 +1682,7 @@ async function refreshNativeAgentConfigs(
   for (const [name, agent] of Object.entries(AGENT_DEFINITIONS)) {
     staleCandidateNativeAgentNames.add(name);
     const status = agentStatusByName?.get(name);
-    if (agentStatusByName && !isInstallableStatus(status)) {
+    if (agentStatusByName && !isCatalogInstallableStatus(status)) {
       if (options.verbose) {
         const label = status ?? "unlisted";
         console.log(`  skipped native agent ${name}.toml (status: ${label})`);
@@ -1447,7 +1723,7 @@ async function refreshNativeAgentConfigs(
       if (!file.endsWith(".toml")) continue;
       const agentName = file.slice(0, -5);
       const agentStatus = agentStatusByName?.get(agentName);
-      if (isInstallableStatus(agentStatus)) continue;
+      if (isCatalogInstallableStatus(agentStatus)) continue;
       if (
         !staleCandidateNativeAgentNames.has(agentName) &&
         agentStatus === undefined
@@ -1523,6 +1799,7 @@ export async function installSkills(
 ): Promise<SetupCategorySummary> {
   const summary = createEmptyCategorySummary();
   if (!existsSync(srcDir)) return summary;
+  const installableSkillNames = getSetupInstallableSkillNames(tryReadCatalogManifest());
   const installableSkills: Array<{
     name: string;
     sourceDir: string;
@@ -1532,13 +1809,11 @@ export async function installSkills(
   const skillStatusByName = manifest
     ? new Map(manifest.skills.map((skill) => [skill.name, skill.status]))
     : null;
-  const isInstallableStatus = (status: string | undefined): boolean =>
-    status === "active" || status === "internal";
   const isSetupInstallableSkill = (
     skillName: string,
     status: string | undefined,
   ): boolean =>
-    isInstallableStatus(status) || SETUP_ONLY_INSTALLABLE_SKILLS.has(skillName);
+    isCatalogInstallableStatus(status) || installableSkillNames.has(skillName);
   const entries = await readdir(srcDir, { withFileTypes: true });
   const staleCandidateSkillNames = new Set(
     manifest?.skills.map((skill) => skill.name) ?? [],
@@ -1635,6 +1910,100 @@ export async function installSkills(
   }
 
   return summary;
+}
+
+async function removeDirectoryCopyAware(
+  sourceDir: string,
+  backupContext: SetupBackupContext,
+  options: Pick<SetupOptions, "dryRun" | "verbose">,
+): Promise<boolean> {
+  const destinationExists = existsSync(sourceDir);
+  if (!destinationExists) return false;
+
+  const relativePath = relative(backupContext.baseRoot, sourceDir);
+  const safeRelativePath =
+    relativePath.startsWith("..") || relativePath === ""
+      ? sourceDir.replace(/^[/]+/, "")
+      : relativePath;
+  const backupPath = join(backupContext.backupRoot, safeRelativePath);
+
+  if (!options.dryRun) {
+    await mkdir(dirname(backupPath), { recursive: true });
+    await cp(sourceDir, backupPath, { recursive: true });
+  }
+  if (options.verbose) {
+    console.log(`  backup ${sourceDir} -> ${backupPath}`);
+  }
+
+  if (!options.dryRun) {
+    await rm(sourceDir, { recursive: true, force: true });
+  }
+  return true;
+}
+
+interface LegacySkillCleanupResult {
+  removedSkillNames: string[];
+  skippedSkillNames: string[];
+  warnings: string[];
+}
+
+async function cleanupLegacyManagedUserSkills(
+  srcDir: string,
+  dstDir: string,
+  backupContext: SetupBackupContext,
+  options: Pick<SetupOptions, "dryRun" | "verbose">,
+): Promise<LegacySkillCleanupResult> {
+  const result: LegacySkillCleanupResult = {
+    removedSkillNames: [],
+    skippedSkillNames: [],
+    warnings: [],
+  };
+  if (!existsSync(dstDir) || !existsSync(srcDir)) {
+    return result;
+  }
+
+  const manifest = tryReadCatalogManifest();
+  const installableSkillNames = getSetupInstallableSkillNames(manifest);
+
+  for (const skillName of installableSkillNames) {
+    const shippedSkillDir = join(srcDir, skillName);
+    const installedSkillDir = join(dstDir, skillName);
+    const shippedSkillMd = join(shippedSkillDir, "SKILL.md");
+    const installedSkillMd = join(installedSkillDir, "SKILL.md");
+    if (!existsSync(shippedSkillMd) || !existsSync(installedSkillMd)) continue;
+
+    const mismatch = await compareDirectoryMirror(shippedSkillDir, installedSkillDir, {
+      expectedContent: (relativeFile, content) => {
+        if (relativeFile !== "SKILL.md") return content;
+        return Buffer.from(
+          rewriteInstalledSkillDescriptionBadge(
+            content.toString("utf-8"),
+            shippedSkillMd,
+          ),
+          "utf-8",
+        );
+      },
+    });
+
+    if (mismatch) {
+      const warning =
+        `Skipping legacy skill cleanup for ${skillName}: installed directory differs from OMX-managed content (${mismatch.kind}${mismatch.path ? `: ${mismatch.path}` : ""}).`;
+      result.skippedSkillNames.push(skillName);
+      result.warnings.push(warning);
+      continue;
+    }
+
+    const removed = await removeDirectoryCopyAware(
+      installedSkillDir,
+      backupContext,
+      options,
+    );
+    if (removed) {
+      result.removedSkillNames.push(skillName);
+    }
+  }
+
+  return result;
 }
 
 async function updateManagedConfig(

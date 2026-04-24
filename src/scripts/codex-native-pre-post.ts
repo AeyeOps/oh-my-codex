@@ -639,7 +639,18 @@ function isQuestionReturnPaneAssignment(token: string): boolean {
   return /^%\d+$/.test(value) || /^\$\{?TMUX_PANE\}?$/.test(value);
 }
 
+function hasInheritedQuestionReturnPaneBridge(): boolean {
+  // Intentionally trust only the explicit bridge envs that question renderer
+  // already accepts outside tmux; TMUX_PANE alone is not stable across all
+  // Bash/background-terminal tool paths that this enforcement protects.
+  const explicitPane = safeString(
+    process.env.OMX_QUESTION_RETURN_PANE || process.env.OMX_LEADER_PANE_ID,
+  ).trim();
+  return /^%\d+$/.test(explicitPane);
+}
+
 function commandHasQuestionReturnPane(command: string): boolean {
+  if (hasInheritedQuestionReturnPaneBridge()) return true;
   return (tokenizeShellCommand(command) ?? []).some(isQuestionReturnPaneAssignment);
 }
 

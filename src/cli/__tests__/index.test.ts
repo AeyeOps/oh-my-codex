@@ -1089,16 +1089,17 @@ describe("project launch scope helpers", () => {
     }
   });
 
-  it("reads persisted setup preferences when skill target is present", async () => {
+  it("reads persisted setup preferences when install mode is present", async () => {
     const wd = await mkdtemp(join(tmpdir(), "omx-launch-scope-"));
     try {
       await mkdir(join(wd, ".omx"), { recursive: true });
       await writeFile(
         join(wd, ".omx", "setup-scope.json"),
-        JSON.stringify({ scope: "user" }),
+        JSON.stringify({ scope: "user", installMode: "plugin" }),
       );
       assert.deepEqual(readPersistedSetupPreferences(wd), {
         scope: "user",
+        installMode: "plugin",
       });
     } finally {
       await rm(wd, { recursive: true, force: true });
