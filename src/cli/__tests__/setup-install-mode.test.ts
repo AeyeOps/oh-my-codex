@@ -340,6 +340,42 @@ describe("omx setup install mode behavior", () => {
     }
   });
 
+  it("honors persisted project-scoped plugin mode on repeat setup", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-setup-install-mode-"));
+    try {
+      await withTempCwd(wd, async () => {
+        await setup({ scope: "project", installMode: "plugin" });
+
+        const persisted = JSON.parse(
+          await readFile(join(wd, ".omx", "setup-scope.json"), "utf-8"),
+        ) as { scope: string; installMode?: string };
+        assert.deepEqual(persisted, {
+          scope: "project",
+          installMode: "plugin",
+        });
+
+        await setup({ scope: "project" });
+
+        assert.equal(
+          existsSync(join(wd, ".codex", "skills", "help", "SKILL.md")),
+          false,
+        );
+        assert.equal(
+          existsSync(join(wd, ".codex", "agents", "planner.toml")),
+          false,
+        );
+        assert.equal(
+          existsSync(join(wd, ".codex", "prompts", "executor.md")),
+          false,
+        );
+        const hooks = await readFile(join(wd, ".codex", "hooks.json"), "utf-8");
+        assert.match(hooks, /codex-native-hook\.js/);
+      });
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
   it("installs project-scoped native hooks when plugin mode is explicitly requested", async () => {
     const wd = await mkdtemp(join(tmpdir(), "omx-setup-install-mode-"));
     try {

@@ -849,12 +849,13 @@ async function resolveSetupInstallMode(
   if (requestedInstallMode) {
     return { installMode: requestedInstallMode, source: "cli" };
   }
-  if (scope !== "user") return null;
 
   const persisted = await readPersistedSetupPreferences(projectRoot);
   if (persisted?.installMode) {
     return { installMode: persisted.installMode, source: "persisted" };
   }
+
+  if (scope !== "user") return null;
 
   const discoveredPluginCacheDir = await discoverOmxPluginCacheDir();
   const defaultMode = discoveredPluginCacheDir
