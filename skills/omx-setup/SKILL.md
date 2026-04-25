@@ -29,11 +29,12 @@ Supported setup flags (current implementation):
 1. Resolve setup scope:
    - `--scope` explicit value
    - else persisted `./.omx/setup-scope.json` (with automatic migration of legacy values)
+   - if a TTY user has persisted setup preferences, `omx setup` first summarizes the recorded choices and asks whether to **keep**, **review/change**, or **reset** them
    - else interactive prompt on TTY (default `user`)
    - else default `user` (safe for CI/tests)
 2. If scope is `user`, resolve user skill delivery mode:
    - explicit `--plugin`, if present
-   - persisted install mode in `./.omx/setup-scope.json`, if present
+   - persisted install mode in `./.omx/setup-scope.json`, if present and the TTY review decision is `keep`
    - else discovered installed plugin cache under `${CODEX_HOME:-~/.codex}/plugins/cache/**/.codex-plugin/plugin.json` with `name: oh-my-codex` makes `plugin` the default
    - else interactive prompt on TTY (`legacy` by default, or `plugin` when a plugin cache is discovered)
    - else default `legacy` unless a plugin cache is discovered
@@ -45,8 +46,9 @@ Supported setup flags (current implementation):
 
 ## Important behavior notes
 
-- `omx setup` only prompts for scope when no scope is provided/persisted and stdin/stdout are TTY.
-- In `user` scope, `omx setup` also prompts for skill delivery mode when no prior install mode is persisted; installed plugin cache discovery makes plugin mode the default prompt/non-interactive choice.
+- `omx setup` prompts for scope when no scope is provided and stdin/stdout are TTY. If `./.omx/setup-scope.json` already exists, setup now summarizes the saved choices first and asks whether to keep them, review/change them, or reset and behave like a fresh setup run.
+- Non-interactive setup never blocks for this review prompt: it keeps deterministic CLI/persisted/default behavior for CI and scripted installs.
+- In `user` scope, `omx setup` also prompts for skill delivery mode when no prior install mode is kept; installed plugin cache discovery makes plugin mode the default prompt/non-interactive choice.
 - Local project orchestration file is `./AGENTS.md` (project root).
 - If `AGENTS.md` exists and `--force` is not used, interactive TTY runs ask whether to overwrite. Non-interactive runs preserve the file.
 - Scope targets:
@@ -60,6 +62,30 @@ Supported setup flags (current implementation):
 - Plugin mode prompts separately for optional AGENTS.md defaults and optional `developer_instructions` defaults. If `developer_instructions` already exists, setup asks before overwriting it; non-interactive runs preserve it.
 - With `--force`, AGENTS overwrite may still be skipped if an active OMX session is detected (safety guard).
 - Legacy persisted scope values (`project-local`) are automatically migrated to `project` with a one-time warning.
+
+## Setup-owned configuration surfaces
+
+Use this map when reconciling setup behavior or debugging a confusing install:
+
+| Surface | Owner | Notes |
+| --- | --- | --- |
+| `./.omx/setup-scope.json` | `omx setup` | Persists setup scope and user-scope skill delivery mode. TTY reruns summarize it and offer keep/review/reset. |
+| `~/.codex/config.toml` / `./.codex/config.toml` | `omx setup` generated blocks + user edits | Setup refreshes OMX-managed blocks while preserving supported manual content. |
+| `~/.codex/hooks.json` / `./.codex/hooks.json` | `omx setup` shared ownership | Setup owns OMX native hook wrappers and preserves user-owned hooks. |
+| prompts, skills, native agents | `omx setup` or Codex plugin delivery | Legacy mode installs local files; plugin mode relies on plugin discovery and cleans matching legacy OMX-managed copies. |
+| `AGENTS.md` | `omx setup` with overwrite safety | Generated defaults or managed refreshes are guarded by force/session checks. |
+| `./.omx/hud-config.json` | `omx setup` / `$hud` | Setup creates the focused default; `$hud` can adjust it later. |
+| notification hooks | `omx setup` / `$configure-notifications` | Setup wires defaults outside plugin skill delivery; notification skill owns deeper provider configuration. |
+
+## If `$omx-setup` is missing or stale
+
+The source repo ships `skills/omx-setup/SKILL.md` and the catalog marks it active. If Codex does not show `$omx-setup`, treat it as an installation/discovery issue rather than a missing source skill:
+
+1. Run `omx setup --verbose` in the intended scope.
+2. Run `omx doctor` and check the reported setup scope, Codex home, skill root, and hook/config status.
+3. If using project scope, confirm `./.codex/skills/omx-setup/SKILL.md` exists.
+4. If using user scope, confirm `${CODEX_HOME:-~/.codex}/skills/omx-setup/SKILL.md` exists in legacy mode, or that the oh-my-codex plugin is installed/discovered in plugin mode.
+5. If duplicate/stale skills appear, check for legacy `~/.agents/skills` overlap and follow the cleanup hint printed by setup/doctor.
 
 ## Recommended workflow
 

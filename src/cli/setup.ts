@@ -81,6 +81,10 @@ interface SetupOptions {
   scope?: SetupScope;
   verbose?: boolean;
   agentsOverwritePrompt?: (destinationPath: string) => Promise<boolean>;
+  setupScopePrompt?: (defaultScope: SetupScope) => Promise<SetupScope>;
+  persistedSetupReviewPrompt?: (
+    preferences: Partial<PersistedSetupScope>,
+  ) => Promise<PersistedSetupReviewDecision>;
   installModePrompt?: (
     defaultMode: SetupInstallMode,
   ) => Promise<SetupInstallMode>;
@@ -212,6 +216,8 @@ interface ResolvedSetupInstallMode {
   installMode: SetupInstallMode;
   source: "cli" | "persisted" | "prompt" | "default";
 }
+
+type PersistedSetupReviewDecision = "keep" | "review" | "reset";
 
 const REQUIRED_TEAM_CLI_API_MARKERS = [
   "if (subcommand === 'api')",
@@ -557,15 +563,23 @@ async function promptForSetupScope(
     output: process.stdout,
   });
   try {
+    const userDefaultMarker = defaultScope === "user" ? " (default)" : "";
+    const projectDefaultMarker = defaultScope === "project" ? " (default)" : "";
+    const defaultChoice = defaultScope === "project" ? "2" : "1";
     console.log("Select setup scope:");
     console.log(
-      `  1) user (default) — installs to ${codexHome()} (skills default to ${userSkillsDir()})`,
+      `  1) user${userDefaultMarker} — installs to ${codexHome()} (skills default to ${userSkillsDir()})`,
     );
-    console.log("  2) project — installs to ./.codex (local to project)");
-    const answer = (await rl.question("Scope [1-2] (default: 1): "))
+    console.log(
+      `  2) project${projectDefaultMarker} — installs to ./.codex (local to project)`,
+    );
+    const answer = (
+      await rl.question(`Scope [1-2] (default: ${defaultChoice}): `)
+    )
       .trim()
       .toLowerCase();
     if (answer === "2" || answer === "project") return "project";
+    if (answer === "1" || answer === "user") return "user";
     return defaultScope;
   } finally {
     rl.close();
@@ -599,6 +613,54 @@ async function promptForSetupInstallMode(
     if (answer === "2" || answer === "plugin") return "plugin";
     if (answer === "1" || answer === "legacy") return "legacy";
     return defaultMode;
+  } finally {
+    rl.close();
+  }
+}
+
+function hasPersistedSetupPreferences(
+  preferences: Partial<PersistedSetupScope> | undefined,
+): preferences is Partial<PersistedSetupScope> {
+  return Boolean(preferences?.scope || preferences?.installMode);
+}
+
+function formatPersistedSetupPreferenceSummary(
+  preferences: Partial<PersistedSetupScope>,
+): string {
+  return [
+    `scope=${preferences.scope ?? "not recorded"}`,
+    `installMode=${preferences.installMode ?? "not recorded"}`,
+  ].join(", ");
+}
+
+async function promptForPersistedSetupReview(
+  preferences: Partial<PersistedSetupScope>,
+): Promise<PersistedSetupReviewDecision> {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    return "keep";
+  }
+  const rl = createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+  try {
+    console.log("Existing OMX setup preferences detected:");
+    console.log(`  ${formatPersistedSetupPreferenceSummary(preferences)}`);
+    console.log("  1) keep   — reuse these choices for this setup run");
+    console.log("  2) review — review/change choices, using these values as defaults");
+    console.log("  3) reset  — ignore saved choices and run setup as if fresh");
+    const answer = (
+      await rl.question("Setup preferences [1-3] (default: 1 keep): ")
+    )
+      .trim()
+      .toLowerCase();
+    if (answer === "2" || answer === "review" || answer === "change") {
+      return "review";
+    }
+    if (answer === "3" || answer === "reset" || answer === "fresh") {
+      return "reset";
+    }
+    return "keep";
   } finally {
     rl.close();
   }
@@ -728,16 +790,29 @@ async function promptForPluginDeveloperInstructionsOverwrite(
 async function resolveSetupScope(
   projectRoot: string,
   requestedScope?: SetupScope,
+  persistedReviewDecision: PersistedSetupReviewDecision = "keep",
+  persistedPreferences?: Partial<PersistedSetupScope>,
+  setupScopePrompt?: (defaultScope: SetupScope) => Promise<SetupScope>,
 ): Promise<ResolvedSetupScope> {
   if (requestedScope) {
     return { scope: requestedScope, source: "cli" };
   }
-  const persisted = await readPersistedSetupPreferences(projectRoot);
-  if (persisted?.scope) {
+  const persisted =
+    persistedPreferences ?? (await readPersistedSetupPreferences(projectRoot));
+  if (persisted?.scope && persistedReviewDecision === "keep") {
     return { scope: persisted.scope, source: "persisted" };
   }
-  if (process.stdin.isTTY && process.stdout.isTTY) {
-    const scope = await promptForSetupScope(DEFAULT_SETUP_SCOPE);
+  if (
+    typeof setupScopePrompt === "function" ||
+    (process.stdin.isTTY && process.stdout.isTTY)
+  ) {
+    const defaultScope =
+      persistedReviewDecision === "review" && persisted?.scope
+        ? persisted.scope
+        : DEFAULT_SETUP_SCOPE;
+    const scope = setupScopePrompt
+      ? await setupScopePrompt(defaultScope)
+      : await promptForSetupScope(defaultScope);
     return { scope, source: "prompt" };
   }
   return { scope: DEFAULT_SETUP_SCOPE, source: "default" };
@@ -810,24 +885,37 @@ async function resolveSetupInstallMode(
   installModePrompt?: (
     defaultMode: SetupInstallMode,
   ) => Promise<SetupInstallMode>,
+  persistedReviewDecision: PersistedSetupReviewDecision = "keep",
+  persistedPreferences?: Partial<PersistedSetupScope>,
 ): Promise<ResolvedSetupInstallMode | null> {
   if (requestedInstallMode) {
     return { installMode: requestedInstallMode, source: "cli" };
   }
 
-  const persisted = await readPersistedSetupPreferences(projectRoot);
-  if (persisted?.installMode && persisted.scope === scope) {
+  const persisted =
+    persistedPreferences ?? (await readPersistedSetupPreferences(projectRoot));
+  if (
+    persisted?.installMode &&
+    persistedReviewDecision === "keep" &&
+    persisted.scope === scope
+  ) {
     return { installMode: persisted.installMode, source: "persisted" };
   }
 
   if (scope !== "user") return null;
 
   const discoveredPluginCacheDir = await discoverOmxPluginCacheDir();
-  const defaultMode = discoveredPluginCacheDir
-    ? "plugin"
-    : DEFAULT_SETUP_INSTALL_MODE;
+  const defaultMode =
+    persistedReviewDecision === "review" && persisted?.installMode
+      ? persisted.installMode
+      : discoveredPluginCacheDir
+        ? "plugin"
+        : DEFAULT_SETUP_INSTALL_MODE;
 
-  if (process.stdin.isTTY && process.stdout.isTTY) {
+  if (
+    typeof installModePrompt === "function" ||
+    (process.stdin.isTTY && process.stdout.isTTY)
+  ) {
     if (discoveredPluginCacheDir) {
       console.log(
         `Detected installed oh-my-codex Codex plugin cache at ${discoveredPluginCacheDir}.`,
@@ -1347,6 +1435,8 @@ export async function setup(options: SetupOptions = {}): Promise<void> {
     installMode: requestedInstallMode,
     scope: requestedScope,
     verbose = false,
+    setupScopePrompt,
+    persistedSetupReviewPrompt,
     installModePrompt,
     modelUpgradePrompt,
     pluginAgentsMdPrompt,
@@ -1355,12 +1445,44 @@ export async function setup(options: SetupOptions = {}): Promise<void> {
   } = options;
   const pkgRoot = getPackageRoot();
   const projectRoot = process.cwd();
-  const resolvedScope = await resolveSetupScope(projectRoot, requestedScope);
+  const persistedPreferences = await readPersistedSetupPreferences(projectRoot);
+  let persistedReviewDecision: PersistedSetupReviewDecision = "keep";
+  const effectiveScopeForInstallMode =
+    requestedScope ?? persistedPreferences?.scope ?? DEFAULT_SETUP_SCOPE;
+  const wouldUsePersistedScope =
+    !requestedScope && Boolean(persistedPreferences?.scope);
+  const wouldUsePersistedInstallMode =
+    !requestedInstallMode &&
+    Boolean(persistedPreferences?.installMode) &&
+    (!persistedPreferences?.scope ||
+      persistedPreferences.scope === effectiveScopeForInstallMode);
+  const shouldReviewPersistedSetup =
+    hasPersistedSetupPreferences(persistedPreferences) &&
+    (wouldUsePersistedScope || wouldUsePersistedInstallMode) &&
+    (typeof persistedSetupReviewPrompt === "function" ||
+      (process.stdin.isTTY && process.stdout.isTTY));
+  if (shouldReviewPersistedSetup) {
+    persistedReviewDecision = persistedSetupReviewPrompt
+      ? await persistedSetupReviewPrompt(persistedPreferences)
+      : await promptForPersistedSetupReview(persistedPreferences);
+    console.log(
+      `Setup preference review: ${persistedReviewDecision} (${formatPersistedSetupPreferenceSummary(persistedPreferences)})\n`,
+    );
+  }
+  const resolvedScope = await resolveSetupScope(
+    projectRoot,
+    requestedScope,
+    persistedReviewDecision,
+    persistedPreferences,
+    setupScopePrompt,
+  );
   const resolvedInstallMode = await resolveSetupInstallMode(
     projectRoot,
     resolvedScope.scope,
     requestedInstallMode,
     installModePrompt,
+    persistedReviewDecision,
+    persistedPreferences,
   );
   const scopeDirs = resolveScopeDirectories(resolvedScope.scope, projectRoot);
   const scopeSourceMessage =
