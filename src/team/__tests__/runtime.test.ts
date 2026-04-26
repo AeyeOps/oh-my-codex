@@ -1516,7 +1516,8 @@ esac
     const previousWorkerCli = process.env.OMX_TEAM_WORKER_CLI;
     const previousReadyTimeout = process.env.OMX_TEAM_READY_TIMEOUT_MS;
     const previousStartupEvidenceTimeout = process.env.OMX_TEAM_STARTUP_EVIDENCE_TIMEOUT_MS;
-    const previousCliMap = process.env.OMX_TEAM_WORKER_CLI_MAP;
+    const previousStartupDispatchRetries = process.env.OMX_TEAM_STARTUP_DISPATCH_RETRIES;
+    let receiptFailer: NodeJS.Timeout | null = null;
     let runtimeTeamName: string | null = null;
 
     try {
@@ -1588,16 +1589,33 @@ case "$1" in
     ;;
 esac
 `,
-          binaries: [{ name: 'gemini', content: '#!/bin/sh\nsleep 30\n' }],
+          binaries: [{ name: 'codex', content: '#!/usr/bin/env node\nprocess.stdin.resume();\n' }],
         },
         async () => {
           delete process.env.TMUX;
           process.env.TMUX_PANE = '%1';
           process.env.OMX_TEAM_WORKER_LAUNCH_MODE = 'interactive';
-          process.env.OMX_TEAM_WORKER_CLI = 'gemini';
-          process.env.OMX_TEAM_WORKER_CLI_MAP = 'gemini';
+          process.env.OMX_TEAM_WORKER_CLI = 'codex';
           process.env.OMX_TEAM_READY_TIMEOUT_MS = '2000';
           process.env.OMX_TEAM_STARTUP_EVIDENCE_TIMEOUT_MS = '50';
+          process.env.OMX_TEAM_STARTUP_DISPATCH_RETRIES = '1';
+
+          receiptFailer = setInterval(() => {
+            void (async () => {
+              const requests = await listDispatchRequests('team-parallel-ready', cwd, { kind: 'inbox' }).catch(() => []);
+              for (const request of requests) {
+                if (request.status !== 'pending') continue;
+                await transitionDispatchRequest(
+                  'team-parallel-ready',
+                  request.request_id,
+                  'pending',
+                  'failed',
+                  { last_reason: 'test_failed_receipt' },
+                  cwd,
+                ).catch(() => {});
+              }
+            })();
+          }, 20);
 
           const runtime = await withoutTeamWorkerEnv(() =>
             startTeam(
@@ -1625,6 +1643,7 @@ esac
         },
       );
     } finally {
+      if (receiptFailer) clearInterval(receiptFailer);
       if (runtimeTeamName) await shutdownTeam(runtimeTeamName, cwd, { force: true }).catch(() => {});
       if (typeof previousTmux === 'string') process.env.TMUX = previousTmux;
       else delete process.env.TMUX;
@@ -1638,8 +1657,8 @@ esac
       else delete process.env.OMX_TEAM_READY_TIMEOUT_MS;
       if (typeof previousStartupEvidenceTimeout === 'string') process.env.OMX_TEAM_STARTUP_EVIDENCE_TIMEOUT_MS = previousStartupEvidenceTimeout;
       else delete process.env.OMX_TEAM_STARTUP_EVIDENCE_TIMEOUT_MS;
-      if (typeof previousCliMap === 'string') process.env.OMX_TEAM_WORKER_CLI_MAP = previousCliMap;
-      else delete process.env.OMX_TEAM_WORKER_CLI_MAP;
+      if (typeof previousStartupDispatchRetries === 'string') process.env.OMX_TEAM_STARTUP_DISPATCH_RETRIES = previousStartupDispatchRetries;
+      else delete process.env.OMX_TEAM_STARTUP_DISPATCH_RETRIES;
       await rm(cwd, { recursive: true, force: true });
     }
   });
@@ -1828,7 +1847,9 @@ process.on('SIGTERM', () => process.exit(0));
     const previousLaunchMode = process.env.OMX_TEAM_WORKER_LAUNCH_MODE;
     const previousWorkerCli = process.env.OMX_TEAM_WORKER_CLI;
     const previousReadyTimeout = process.env.OMX_TEAM_READY_TIMEOUT_MS;
-    const previousCliMap = process.env.OMX_TEAM_WORKER_CLI_MAP;
+    const previousStartupEvidenceTimeout = process.env.OMX_TEAM_STARTUP_EVIDENCE_TIMEOUT_MS;
+    const previousStartupDispatchRetries = process.env.OMX_TEAM_STARTUP_DISPATCH_RETRIES;
+    let receiptFailer: NodeJS.Timeout | null = null;
 
     try {
       await withMockTmuxFixture(
@@ -1891,15 +1912,33 @@ case "$1" in
     ;;
 esac
 `,
-          binaries: [{ name: 'gemini', content: '#!/bin/sh\nsleep 30\n' }],
+          binaries: [{ name: 'codex', content: '#!/usr/bin/env node\nprocess.stdin.resume();\n' }],
         },
         async () => {
           delete process.env.TMUX;
           process.env.TMUX_PANE = '%1';
           process.env.OMX_TEAM_WORKER_LAUNCH_MODE = 'interactive';
-          process.env.OMX_TEAM_WORKER_CLI = 'gemini';
-          process.env.OMX_TEAM_WORKER_CLI_MAP = 'gemini';
+          process.env.OMX_TEAM_WORKER_CLI = 'codex';
           process.env.OMX_TEAM_READY_TIMEOUT_MS = '300';
+          process.env.OMX_TEAM_STARTUP_EVIDENCE_TIMEOUT_MS = '50';
+          process.env.OMX_TEAM_STARTUP_DISPATCH_RETRIES = '1';
+
+          receiptFailer = setInterval(() => {
+            void (async () => {
+              const requests = await listDispatchRequests('team-parallel-dead-pane', cwd, { kind: 'inbox' }).catch(() => []);
+              for (const request of requests) {
+                if (request.status !== 'pending') continue;
+                await transitionDispatchRequest(
+                  'team-parallel-dead-pane',
+                  request.request_id,
+                  'pending',
+                  'failed',
+                  { last_reason: 'test_failed_receipt' },
+                  cwd,
+                ).catch(() => {});
+              }
+            })();
+          }, 20);
 
           await assert.rejects(
             () => withoutTeamWorkerEnv(() =>
@@ -1923,6 +1962,7 @@ esac
         },
       );
     } finally {
+      if (receiptFailer) clearInterval(receiptFailer);
       if (typeof previousTmux === 'string') process.env.TMUX = previousTmux;
       else delete process.env.TMUX;
       if (typeof previousTmuxPane === 'string') process.env.TMUX_PANE = previousTmuxPane;
@@ -1933,8 +1973,10 @@ esac
       else delete process.env.OMX_TEAM_WORKER_CLI;
       if (typeof previousReadyTimeout === 'string') process.env.OMX_TEAM_READY_TIMEOUT_MS = previousReadyTimeout;
       else delete process.env.OMX_TEAM_READY_TIMEOUT_MS;
-      if (typeof previousCliMap === 'string') process.env.OMX_TEAM_WORKER_CLI_MAP = previousCliMap;
-      else delete process.env.OMX_TEAM_WORKER_CLI_MAP;
+      if (typeof previousStartupEvidenceTimeout === 'string') process.env.OMX_TEAM_STARTUP_EVIDENCE_TIMEOUT_MS = previousStartupEvidenceTimeout;
+      else delete process.env.OMX_TEAM_STARTUP_EVIDENCE_TIMEOUT_MS;
+      if (typeof previousStartupDispatchRetries === 'string') process.env.OMX_TEAM_STARTUP_DISPATCH_RETRIES = previousStartupDispatchRetries;
+      else delete process.env.OMX_TEAM_STARTUP_DISPATCH_RETRIES;
       await rm(cwd, { recursive: true, force: true });
     }
   });
