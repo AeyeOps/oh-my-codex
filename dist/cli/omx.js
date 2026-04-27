@@ -19,7 +19,7 @@ if (existsSync(distEntry)) {
     }
 }
 else {
-    console.error('oh-my-codex: run "npm run compile" first');
+    console.error('oh-my-codex: run "npm run build" first');
     process.exit(1);
 }
 //# sourceMappingURL=omx.js.map

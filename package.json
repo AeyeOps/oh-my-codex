@@ -16,7 +16,6 @@
     "clean:native-package-assets": "node dist/scripts/cleanup-explore-harness.js",
     "dev": "tsc --watch",
     "lint": "biome lint src",
-    "postinstall": "node src/scripts/postinstall-bootstrap.js",
     "setup": "node dist/cli/omx.js setup",
     "doctor": "node dist/cli/omx.js doctor",
     "ask:claude": "./src/scripts/ask-claude.sh",

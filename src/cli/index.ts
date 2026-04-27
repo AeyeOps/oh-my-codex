@@ -7,6 +7,7 @@ import { execFileSync, spawn } from "child_process";
 import { basename, dirname, join } from "path";
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "fs";
 import { constants as osConstants } from "os";
+import { ensureInstallStamp } from "./install-stamp.js";
 import { setup, SETUP_SCOPES, type SetupInstallMode, type SetupScope } from "./setup.js";
 import { uninstall } from "./uninstall.js";
 import { version } from "./version.js";
@@ -693,6 +694,7 @@ export function buildHudPaneCleanupTargets(
 }
 
 export async function main(args: string[]): Promise<void> {
+  await ensureInstallStamp();
   const knownCommands = new Set([
     "launch",
     "exec",

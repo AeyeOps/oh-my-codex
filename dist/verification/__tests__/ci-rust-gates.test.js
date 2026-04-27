@@ -21,7 +21,7 @@ describe('CI Rust gates', () => {
         assert.match(workflow, /clippy:/);
         assert.match(workflow, /components:\s*clippy/);
         assert.match(workflow, /cargo clippy --workspace --all-targets -- -D warnings/);
-        assert.match(workflow, /build:\s*\n(?:.*\n)*?\s+- name: Setup Rust\s*\n\s+uses: dtolnay\/rust-toolchain@v1\s*\n\s+with:\s*\n\s+toolchain: stable(?:.*\n)*?\s+- name: Download prebuilt dist artifact\s*\n\s+uses: actions\/download-artifact@v8(?:.*\n)*?\s+- run: npm run compile:explore:release(?:.*\n)*?\s+- run: npm run compile:sparkshell/m);
+        assert.match(workflow, /build:\s*\n(?:.*\n)*?\s+- name: Setup Rust\s*\n\s+uses: dtolnay\/rust-toolchain@v1\s*\n\s+with:\s*\n\s+toolchain: stable(?:.*\n)*?\s+- name: Download prebuilt dist artifact\s*\n\s+uses: actions\/download-artifact@v8(?:.*\n)*?\s+- run: npm run build:explore:release(?:.*\n)*?\s+- run: npm run build:sparkshell/m);
     });
     it('reuses a prebuilt dist artifact only on the gated lanes that can overlap prerequisite work', () => {
         const workflow = readCiWorkflow();
@@ -39,7 +39,7 @@ describe('CI Rust gates', () => {
         }
         assert.match(testJob, /^\s+- name:\s*Download prebuilt dist artifact\s*\n\s+uses:\s*actions\/download-artifact@v8(?:.*\n)*?\s+path:\s*dist/m);
         assert.match(testJob, /^\s+- name:\s*Run grouped full-suite lane\s*\n(?:.*\n)*?^\s+run:\s*\|\n\s+node dist\/scripts\/run-test-files\.js/m);
-        assert.doesNotMatch(testJob, /^\s+npm run compile$/m);
+        assert.doesNotMatch(testJob, /^\s+npm run build$/m);
     });
     it('avoids path-filtered CI triggers so required checks cannot be skipped into a pending state', () => {
         const workflow = readCiWorkflow();

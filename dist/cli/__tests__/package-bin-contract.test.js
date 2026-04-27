@@ -14,31 +14,28 @@ describe('package bin contract', () => {
         const binaryName = platform() === 'win32' ? 'omx-sparkshell.exe' : 'omx-sparkshell';
         const packagedSparkShellPath = join(process.cwd(), 'bin', 'native', `${platform()}-${arch()}`, binaryName);
         assert.deepEqual(pkg.bin, { omx: 'dist/cli/omx.js' });
-        for (const scriptName of ['build', 'prepare', 'prepack', 'preinstall', 'install', 'postinstall']) {
-            assert.equal(pkg.scripts?.[scriptName], undefined, `${scriptName} must stay undefined so git installs use committed dist/ instead of rebuilding in npm's temp clone`);
-        }
-        assert.equal(pkg.scripts?.compile, 'node -e "const fs=require(\'fs\'); fs.rmSync(\'dist\',{recursive:true,force:true});" && tsc && node -e "require(\'fs\').chmodSync(\'dist/cli/omx.js\', 0o755)"');
         assert.equal(pkg.scripts?.['build:explore'], 'cargo build -p omx-explore-harness');
         assert.equal(pkg.scripts?.['build:explore:release'], 'node dist/scripts/build-explore-harness.js');
-        assert.equal(pkg.scripts?.['build:full'], 'npm run compile && npm run build:explore:release && npm run build:sparkshell');
+        assert.equal(pkg.scripts?.['build:full'], 'npm run build && npm run build:explore:release && npm run build:sparkshell');
         assert.equal(pkg.scripts?.['clean:native-package-assets'], 'node dist/scripts/cleanup-explore-harness.js');
         assert.equal(pkg.scripts?.['sync:plugin'], 'node dist/scripts/sync-plugin-mirror.js');
         assert.equal(pkg.scripts?.['sync:plugin:check'], 'node dist/scripts/sync-plugin-mirror.js --check');
         assert.equal(pkg.scripts?.['verify:plugin-bundle'], 'node dist/scripts/sync-plugin-mirror.js --check');
         assert.equal(pkg.scripts?.['verify:native-agents'], 'node dist/scripts/verify-native-agents.js');
+        assert.equal(pkg.scripts?.prepack, 'npm run build && npm run verify:native-agents && npm run sync:plugin && npm run verify:plugin-bundle && npm run clean:native-package-assets');
         assert.equal(pkg.scripts?.postpack, 'npm run clean:native-package-assets');
         assert.equal(pkg.scripts?.['test:explore'], 'cargo test -p omx-explore-harness && node --test dist/cli/__tests__/explore.test.js dist/hooks/__tests__/explore-routing.test.js dist/hooks/__tests__/explore-sparkshell-guidance-contract.test.js');
         assert.equal(pkg.scripts?.['test:team:cross-rebase-smoke:compiled'], 'node --test dist/team/__tests__/cross-rebase-smoke.test.js');
         assert.equal(pkg.scripts?.['test:node'], 'node dist/scripts/run-test-files.js dist');
-        assert.equal(pkg.scripts?.test, 'npm run compile && npm run verify:native-agents && npm run verify:plugin-bundle && npm run test:node && node dist/scripts/generate-catalog-docs.js --check');
+        assert.equal(pkg.scripts?.test, 'npm run build && npm run verify:native-agents && npm run verify:plugin-bundle && npm run test:node && node dist/scripts/generate-catalog-docs.js --check');
         assert.equal(pkg.scripts?.['test:ci:compiled'], 'npm run verify:native-agents && npm run verify:plugin-bundle && npm run test:node && node dist/scripts/generate-catalog-docs.js --check');
-        assert.equal(pkg.scripts?.['coverage:team-critical'], "npm run compile && c8 --all --src dist/team --src dist/state --include 'dist/team/**/*.js' --include 'dist/state/**/*.js' --exclude '**/__tests__/**' --reporter=text-summary --reporter=lcov --reporter=json-summary --report-dir coverage/team --check-coverage --lines=78 --functions=90 --branches=70 --statements=78 node dist/scripts/run-test-files.js dist/team/__tests__ dist/state/__tests__");
+        assert.equal(pkg.scripts?.['coverage:team-critical'], "npm run build && c8 --all --src dist/team --src dist/state --include 'dist/team/**/*.js' --include 'dist/state/**/*.js' --exclude '**/__tests__/**' --reporter=text-summary --reporter=lcov --reporter=json-summary --report-dir coverage/team --check-coverage --lines=78 --functions=90 --branches=70 --statements=78 node dist/scripts/run-test-files.js dist/team/__tests__ dist/state/__tests__");
         assert.equal(pkg.scripts?.['coverage:team-critical:compiled'], "c8 --all --src dist/team --src dist/state --include 'dist/team/**/*.js' --include 'dist/state/**/*.js' --exclude '**/__tests__/**' --reporter=text-summary --reporter=lcov --reporter=json-summary --report-dir coverage/team --check-coverage --lines=78 --functions=90 --branches=70 --statements=78 node dist/scripts/run-test-files.js dist/team/__tests__ dist/state/__tests__");
-        assert.equal(pkg.scripts?.['coverage:ts:full'], "npm run compile && c8 --all --src dist --exclude '**/__tests__/**' --exclude 'dist/bin/**' --exclude 'dist/**/*.d.ts' --reporter=text-summary --reporter=lcov --reporter=json-summary --report-dir coverage/ts-full node dist/scripts/run-test-files.js dist");
+        assert.equal(pkg.scripts?.['coverage:ts:full'], "npm run build && c8 --all --src dist --exclude '**/__tests__/**' --exclude 'dist/bin/**' --exclude 'dist/**/*.d.ts' --reporter=text-summary --reporter=lcov --reporter=json-summary --report-dir coverage/ts-full node dist/scripts/run-test-files.js dist");
         assert.equal(pkg.scripts?.['coverage:ts:full:compiled'], "c8 --all --src dist --exclude '**/__tests__/**' --exclude 'dist/bin/**' --exclude 'dist/**/*.d.ts' --reporter=text-summary --reporter=lcov --reporter=json-summary --report-dir coverage/ts-full node dist/scripts/run-test-files.js dist");
         assert.equal(pkg.scripts?.['test:ralph-persistence:compiled'], 'node --test dist/cli/__tests__/session-scoped-runtime.test.js dist/mcp/__tests__/trace-server.test.js dist/hud/__tests__/state.test.js dist/mcp/__tests__/state-server-ralph-phase.test.js dist/ralph/__tests__/persistence.test.js dist/verification/__tests__/ralph-persistence-gate.test.js');
         assert.equal(pkg.scripts?.['test:plugin-boundaries:compiled'], 'node --test dist/cli/__tests__/codex-plugin-layout.test.js dist/cli/__tests__/package-bin-contract.test.js dist/cli/__tests__/setup-hooks-shared-ownership.test.js dist/catalog/__tests__/plugin-bundle-ssot.test.js');
-        assert.equal(pkg.scripts?.['test:compat:node'], 'npm run compile && node dist/scripts/run-test-files.js dist/compat/__tests__');
+        assert.equal(pkg.scripts?.['test:compat:node'], 'npm run build && node dist/scripts/run-test-files.js dist/compat/__tests__');
         for (const scriptName of ['test:node', 'test:ci:compiled', 'coverage:team-critical', 'coverage:team-critical:compiled', 'coverage:ts:full', 'coverage:ts:full:compiled', 'test:ralph-persistence:compiled', 'test:plugin-boundaries:compiled', 'test:compat:node']) {
             const script = pkg.scripts?.[scriptName];
             assert.ok(script, `expected ${scriptName} to exist`);

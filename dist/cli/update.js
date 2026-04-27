@@ -27,7 +27,7 @@ export const FORK_UPDATE_GUIDANCE_LINES = [
     '  cd <oh-my-codex-fork-checkout>',
     '  git pull --ff-only origin main',
     '  npm ci',
-    '  npm run compile',
+    '  npm run build',
     '  npm install -g .',
     '  omx setup',
     '[omx] Restart Codex after refreshing plugin or runtime surfaces.',

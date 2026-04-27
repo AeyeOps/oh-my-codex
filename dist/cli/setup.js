@@ -1147,7 +1147,7 @@ export async function setup(options = {}) {
     }
     else {
         console.log(`  WARNING: ${teamToolsCheck.message}`);
-        console.log("  Run `npm run compile` and then re-run `omx setup`.");
+        console.log("  Run `npm run build` and then re-run `omx setup`.");
     }
     console.log();
     // Step 6: Generate AGENTS.md
