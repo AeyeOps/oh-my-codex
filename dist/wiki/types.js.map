@@ -1,0 +1,1 @@
+{"version":3,"file":"types.js","sourceRoot":"","sources":["../../src/wiki/types.ts"],"names":[],"mappings":"AAAA;;;;GAIG;AAEH,MAAM,CAAC,MAAM,mBAAmB,GAAG,CAAC,CAAC;AAwGrC,MAAM,CAAC,MAAM,mBAAmB,GAAe;IAC7C,OAAO,EAAE,IAAI;IACb,WAAW,EAAE,IAAI;IACjB,eAAe,EAAE,EAAE;IACnB,SAAS,EAAE,EAAE;IACb,WAAW,EAAE,MAAM;IACnB,wBAAwB,EAAE,KAAK;CAChC,CAAC"}

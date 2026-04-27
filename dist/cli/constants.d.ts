@@ -1,0 +1,11 @@
+export declare const MADMAX_FLAG = "--madmax";
+export declare const CODEX_BYPASS_FLAG = "--dangerously-bypass-approvals-and-sandbox";
+export declare const CLAUDE_SKIP_PERMISSIONS_FLAG = "--dangerously-skip-permissions";
+export declare const HIGH_REASONING_FLAG = "--high";
+export declare const XHIGH_REASONING_FLAG = "--xhigh";
+export declare const SPARK_FLAG = "--spark";
+export declare const MADMAX_SPARK_FLAG = "--madmax-spark";
+export declare const CONFIG_FLAG = "-c";
+export declare const LONG_CONFIG_FLAG = "--config";
+export declare const MODEL_FLAG = "--model";
+//# sourceMappingURL=constants.d.ts.map

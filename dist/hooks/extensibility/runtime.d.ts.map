@@ -1,0 +1,1 @@
+{"version":3,"file":"runtime.d.ts","sourceRoot":"","sources":["../../../src/hooks/extensibility/runtime.ts"],"names":[],"mappings":"AAEA,OAAO,KAAK,EAAE,wBAAwB,EAAE,yBAAyB,EAAE,MAAM,YAAY,CAAC;AAUtF,wBAAsB,wBAAwB,CAAC,KAAK,EAAE,wBAAwB,GAAG,OAAO,CAAC,yBAAyB,CAAC,CAgClH"}

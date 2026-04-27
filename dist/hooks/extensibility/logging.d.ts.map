@@ -1,0 +1,1 @@
+{"version":3,"file":"logging.d.ts","sourceRoot":"","sources":["../../../src/hooks/extensibility/logging.ts"],"names":[],"mappings":"AAEA,OAAO,KAAK,EAAE,oBAAoB,EAAE,MAAM,YAAY,CAAC;AAEvD,wBAAgB,WAAW,CAAC,GAAG,EAAE,MAAM,EAAE,SAAS,OAAa,GAAG,MAAM,CAGvE;AAED,wBAAsB,mBAAmB,CAAC,GAAG,EAAE,MAAM,EAAE,KAAK,EAAE,oBAAoB,GAAG,OAAO,CAAC,IAAI,CAAC,CAajG"}

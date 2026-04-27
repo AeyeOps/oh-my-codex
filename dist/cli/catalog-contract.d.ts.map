@@ -1,0 +1,1 @@
+{"version":3,"file":"catalog-contract.d.ts","sourceRoot":"","sources":["../../src/cli/catalog-contract.ts"],"names":[],"mappings":"AAEA,MAAM,WAAW,mBAAmB;IAClC,SAAS,EAAE,MAAM,CAAC;IAClB,QAAQ,EAAE,MAAM,CAAC;CAClB;AAgBD,wBAAgB,sBAAsB,IAAI,mBAAmB,CAY5D;AAED,wBAAgB,wBAAwB,IAAI;IAAE,OAAO,EAAE,MAAM,CAAC;IAAC,MAAM,EAAE,MAAM,CAAA;CAAE,GAAG,IAAI,CAOrF"}
