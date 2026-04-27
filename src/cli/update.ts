@@ -1,9 +1,9 @@
 /**
  * Update orchestration for oh-my-codex.
  *
- * The launch-time checker is intentionally passive, non-fatal, and throttled.
- * The explicit `omx update` command uses the same executor but bypasses the
- * launch-time cadence so a user request always checks npm immediately.
+ * AeyeOps fork policy disables the built-in public-npm update path.
+ * The launch-time checker and explicit `omx update` command now return
+ * fork-managed update guidance instead of checking or installing npm latest.
  */
 
 import { readFile, writeFile, mkdir } from 'fs/promises';
@@ -35,7 +35,7 @@ interface PackageManifest {
 }
 
 export interface UpdateExecutionResult {
-  status: 'updated' | 'up-to-date' | 'declined' | 'failed' | 'unavailable';
+  status: 'updated' | 'up-to-date' | 'declined' | 'failed' | 'unavailable' | 'disabled';
   currentVersion: string | null;
   latestVersion: string | null;
 }
@@ -46,6 +46,40 @@ type SpawnSyncLike = typeof spawnSync;
 
 const PACKAGE_NAME = 'oh-my-codex';
 const CHECK_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12h
+const FORK_MARKETPLACE_NAME = 'oh-my-codex-local';
+const FORK_REPOSITORY = 'AeyeOps/oh-my-codex';
+
+export const FORK_UPDATE_GUIDANCE_LINES = [
+  '[omx] Built-in public-npm update is disabled for this fork-managed OMX install.',
+  '[omx] Update Codex plugin marketplace metadata, skills, MCP metadata, and apps from the fork:',
+  `  codex plugin marketplace upgrade ${FORK_MARKETPLACE_NAME}`,
+  '[omx] If this machine is still pointed at upstream, rewire it once with:',
+  `  codex plugin marketplace remove ${FORK_MARKETPLACE_NAME}`,
+  `  codex plugin marketplace add ${FORK_REPOSITORY}`,
+  '[omx] Update the global OMX runtime from a local fork checkout:',
+  '  cd <oh-my-codex-fork-checkout>',
+  '  git pull --ff-only origin main',
+  '  npm ci',
+  '  npm run build',
+  '  npm install -g .',
+  '  omx setup',
+  '[omx] Restart Codex after refreshing plugin or runtime surfaces.',
+];
+
+function useForkManagedUpdates(): boolean {
+  return process.env.OMX_ENABLE_PUBLIC_NPM_UPDATE !== '1';
+}
+
+function logForkUpdateGuidance(immediate: boolean): void {
+  if (immediate) {
+    for (const line of FORK_UPDATE_GUIDANCE_LINES) console.log(line);
+    return;
+  }
+
+  console.log(
+    '[omx] Built-in public-npm auto-update is disabled for this fork-managed OMX install. Run `omx update` for fork update commands.',
+  );
+}
 
 function parseSemver(version: string): [number, number, number] | null {
   const m = version.trim().match(/^v?(\d+)\.(\d+)\.(\d+)$/);
@@ -327,6 +361,23 @@ async function executeUpdate(
   },
 ): Promise<UpdateExecutionResult> {
   const { cwd, dependencies, prompt, immediate, nowMs = Date.now() } = options;
+
+  if (useForkManagedUpdates()) {
+    const current = await dependencies.getCurrentVersion();
+    try {
+      await dependencies.writeUpdateState(cwd, {
+        last_checked_at: new Date(nowMs).toISOString(),
+        last_seen_latest: 'fork-managed',
+      });
+    } catch {
+      // Update-check state is advisory only. Do not fail explicit update guidance
+      // just because the current working directory is read-only or unavailable.
+    }
+
+    logForkUpdateGuidance(immediate);
+    return { status: 'disabled', currentVersion: current, latestVersion: null };
+  }
+
   const [current, latest] = await Promise.all([
     dependencies.getCurrentVersion(),
     dependencies.fetchLatestVersion(),

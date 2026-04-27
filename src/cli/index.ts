@@ -158,7 +158,7 @@ Usage:
   omx exec      Run codex exec non-interactively with OMX AGENTS/overlay injection
   omx setup     Install skills, prompts, MCP servers, and scope-specific AGENTS.md
                 (user scope prompts for legacy vs plugin skill delivery when needed)
-  omx update    Check npm now, update the global install immediately, then refresh setup
+  omx update    Show fork-managed update commands; public npm auto-update is disabled
   omx uninstall Remove OMX configuration and clean up installed artifacts
   omx doctor    Check installation health
   omx list      List packaged OMX skills and native agent prompts (--json)

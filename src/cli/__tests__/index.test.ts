@@ -1049,7 +1049,7 @@ describe("resolveCliInvocation", () => {
   });
 
   it("advertises the explicit update command in top-level help", () => {
-    assert.match(HELP, /omx update\s+Check npm now, update the global install immediately, then refresh setup/);
+    assert.match(HELP, /omx update\s+Show fork-managed update commands; public npm auto-update is disabled/);
   });
 });
 

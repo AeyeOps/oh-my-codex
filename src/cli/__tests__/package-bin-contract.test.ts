@@ -101,7 +101,7 @@ describe('package bin contract', () => {
     const binSource = readFileSync(binPath, 'utf-8');
     const compiledCliSource = readFileSync(compiledCliPath, 'utf-8');
     assert.match(binSource, /^#!\/usr\/bin\/env node/);
-    assert.match(compiledCliSource, /omx update\s+Check npm now, update the global install immediately, then refresh setup/);
+    assert.match(compiledCliSource, /omx update\s+Show fork-managed update commands; public npm auto-update is disabled/);
     assert.match(compiledCliSource, /case "update"/);
 
     rmSync(packagedSparkShellPath, { force: true });
