@@ -130,7 +130,7 @@ describe('package bin contract', () => {
       { name: 'omx-state', version: '0.1.0' },
       'omx bin wrapper must keep mcp-serve alive long enough to complete stdio initialization',
     );
-    assert.match(compiledCliSource, /omx update\s+Check npm now, update the global install immediately, then refresh setup/);
+    assert.match(compiledCliSource, /omx update\s+Show fork-managed update commands; public npm auto-update is disabled/);
     assert.match(compiledCliSource, /case "update"/);
 
     rmSync(packagedSparkShellPath, { force: true });
