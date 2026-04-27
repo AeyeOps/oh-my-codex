@@ -1,5 +1,24 @@
 # oh-my-codex (OMX)
 
+> [!IMPORTANT]
+> ## Install (AeyeOps fork — `dev` branch)
+>
+> **1. Install the `omx` CLI globally:**
+>
+> ```bash
+> npm install -g https://github.com/AeyeOps/oh-my-codex/archive/refs/heads/dev.tar.gz
+> ```
+>
+> **2. Add the Codex plugin marketplace:**
+>
+> ```bash
+> codex plugin marketplace add https://github.com/AeyeOps/oh-my-codex.git
+> ```
+>
+> The two commands are independent. Run **#1** for the `omx` CLI on your `$PATH`. Run **#2** to also get the Codex plugin's slash commands, MCP servers, and hooks. Run both for the full experience.
+>
+> _This is the AeyeOps fork; the upstream npm registry package is unrelated._
+
 <p align="center">
   <img src="https://yeachan-heo.github.io/oh-my-codex-website/omx-character-nobg.png" alt="oh-my-codex character" width="280">
   <br>
