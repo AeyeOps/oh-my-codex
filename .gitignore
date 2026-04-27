@@ -22,6 +22,9 @@ bin/omx-explore-harness
 bin/omx-explore-harness.exe
 bin/omx-explore-harness.meta.json
 
+# Local validate output (npm run validate)
+validate.log
+
 # Local runtime bridge artifacts (generated)
 authority.json
 backlog.json
